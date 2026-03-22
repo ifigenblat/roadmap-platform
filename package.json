@@ -1,0 +1,32 @@
+{
+  "name": "roadmap-platform",
+  "private": true,
+  "packageManager": "npm@10.5.0",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "bash scripts/dev-stack.sh start",
+    "db:push:all": "bash scripts/db-push-all.sh",
+    "db:reset:local": "bash scripts/db-reset-local.sh",
+    "dev": "turbo run dev --parallel",
+    "ports:free": "bash scripts/free-dev-ports.sh",
+    "stack:start": "bash scripts/dev-stack.sh start",
+    "stack:stop": "bash scripts/dev-stack.sh stop",
+    "stack:stop:down": "bash scripts/dev-stack.sh stop --down",
+    "stack:restart": "bash scripts/dev-stack.sh restart",
+    "stack:status": "bash scripts/dev-stack.sh status",
+    "stack:docker": "bash scripts/dev-stack.sh docker",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.14",
+    "typescript": "^5.6.3"
+  }
+}

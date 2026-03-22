@@ -1,0 +1,2019 @@
+{
+  "info": {
+    "name": "Roadmap Platform",
+    "description": "Single collection: (A) public API via gateway `http://localhost:4000`, (B) direct service URLs for debugging and internal routes. URLs are literal (no `{{baseUrl}}`). Set collection variables for IDs; `internalApiKey` when INTERNAL_API_KEY is set.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "internalApiKey",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "roadmapId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "itemId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "initiativeId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "themeId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "importBatchId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "integrationId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "workspaceId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "teamId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "businessSponsorId",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "phaseSegmentId",
+      "value": "",
+      "type": "default"
+    }
+  ],
+  "item": [
+    {
+      "name": "A · API Gateway",
+      "description": "Normal client path: all `/api/*` routes on port 4000.",
+      "item": [
+        {
+          "name": "Meta",
+          "item": [
+            {
+              "name": "GET /health",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/health"
+              }
+            },
+            {
+              "name": "GET /api/openapi.yaml",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/openapi.yaml"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Roadmaps & roadmap items",
+          "item": [
+            {
+              "name": "GET /api/workspaces",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/workspaces"
+              }
+            },
+            {
+              "name": "GET /api/roadmaps",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps"
+              }
+            },
+            {
+              "name": "POST /api/roadmaps",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"FY26 Product\",\n  \"slug\": \"fy26-product\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/roadmaps"
+              }
+            },
+            {
+              "name": "GET /api/roadmaps/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/roadmaps/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"active\"\n}"
+                },
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}"
+              }
+            },
+            {
+              "name": "POST /api/roadmaps/:id/clone",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Clone\",\n  \"slug\": \"fy26-clone\"\n}"
+                },
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/clone"
+              }
+            },
+            {
+              "name": "POST /api/roadmaps/:id/archive",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/archive"
+              }
+            },
+            {
+              "name": "GET /api/roadmaps/:id/items",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/items"
+              }
+            },
+            {
+              "name": "POST /api/roadmaps/:id/items",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"medium\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-06-30\",\n  \"sortOrder\": 0\n}"
+                },
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/items"
+              }
+            },
+            {
+              "name": "GET /api/roadmaps/:id/themes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/themes"
+              }
+            },
+            {
+              "name": "POST /api/roadmaps/:id/themes",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Growth\",\n  \"objective\": \"Expand revenue\",\n  \"colorToken\": \"blue\",\n  \"orderIndex\": 0\n}"
+                },
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/themes"
+              }
+            },
+            {
+              "name": "GET /api/roadmaps/:id/executive-summary",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/executive-summary"
+              }
+            },
+            {
+              "name": "GET /api/roadmap-items",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmap-items"
+              }
+            },
+            {
+              "name": "POST /api/roadmap-items",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"low\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-03-31\",\n  \"sortOrder\": 1\n}"
+                },
+                "url": "http://localhost:4000/api/roadmap-items"
+              }
+            },
+            {
+              "name": "GET /api/roadmap-items/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/roadmap-items/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"in_progress\"\n}"
+                },
+                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}"
+              }
+            },
+            {
+              "name": "POST /api/roadmap-items/:id/move",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sortOrder\": 10\n}"
+                },
+                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/move"
+              }
+            },
+            {
+              "name": "POST /api/roadmap-items/:id/phases",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+                },
+                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/phases"
+              }
+            },
+            {
+              "name": "PUT /api/roadmap-items/:id/teams",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"teamIds\": [\"{{teamId}}\"]\n}"
+                },
+                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/teams"
+              }
+            },
+            {
+              "name": "PATCH /api/phase-segments/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"status\": \"In Progress\",\n  \"capacityAllocationEstimate\": 0.25,\n  \"sprintEstimate\": 3,\n  \"jiraKey\": \"PROJ-123\",\n  \"notes\": \"Updated via Postman\"\n}"
+                },
+                "url": "http://localhost:4000/api/phase-segments/{{phaseSegmentId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Initiatives, themes, teams & sponsors",
+          "item": [
+            {
+              "name": "GET /api/initiatives",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/initiatives"
+              }
+            },
+            {
+              "name": "POST /api/initiatives",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"canonicalName\": \"Self-serve onboarding\",\n  \"shortObjective\": \"Reduce time-to-value\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/initiatives"
+              }
+            },
+            {
+              "name": "GET /api/initiatives/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/initiatives/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"via gateway\",\n  \"businessSponsorId\": \"{{businessSponsorId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+              }
+            },
+            {
+              "name": "DELETE /api/initiatives/:id",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+              }
+            },
+            {
+              "name": "POST /api/initiatives/:id/themes",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"strategicThemeId\": \"{{themeId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/themes"
+              }
+            },
+            {
+              "name": "PUT /api/initiatives/:id/theme-links",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"strategicThemeIds\": [\"{{themeId}}\"]\n}"
+                },
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/theme-links"
+              }
+            },
+            {
+              "name": "DELETE /api/initiatives/:id/themes/:themeId",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/themes/{{themeId}}"
+              }
+            },
+            {
+              "name": "GET /api/themes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/themes"
+              }
+            },
+            {
+              "name": "POST /api/themes",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Platform\",\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"orderIndex\": 0\n}"
+                },
+                "url": "http://localhost:4000/api/themes"
+              }
+            },
+            {
+              "name": "GET /api/themes/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/themes/{{themeId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/themes/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"objective\": \"Reliability\"\n}"
+                },
+                "url": "http://localhost:4000/api/themes/{{themeId}}"
+              }
+            },
+            {
+              "name": "DELETE /api/themes/:id",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "http://localhost:4000/api/themes/{{themeId}}"
+              }
+            },
+            {
+              "name": "GET /api/teams",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/teams"
+              }
+            },
+            {
+              "name": "POST /api/teams",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Platform squad\",\n  \"kind\": \"squad\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/teams"
+              }
+            },
+            {
+              "name": "GET /api/teams/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/teams/{{teamId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/teams/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"active\": false\n}"
+                },
+                "url": "http://localhost:4000/api/teams/{{teamId}}"
+              }
+            },
+            {
+              "name": "DELETE /api/teams/:id",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "http://localhost:4000/api/teams/{{teamId}}"
+              }
+            },
+            {
+              "name": "GET /api/business-sponsors",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/business-sponsors"
+              }
+            },
+            {
+              "name": "POST /api/business-sponsors",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"displayName\": \"Jane Exec\",\n  \"email\": \"jane@example.com\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/business-sponsors"
+              }
+            },
+            {
+              "name": "GET /api/business-sponsors/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+              }
+            },
+            {
+              "name": "PATCH /api/business-sponsors/:id",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"VP Product\"\n}"
+                },
+                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+              }
+            },
+            {
+              "name": "DELETE /api/business-sponsors/:id",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Templates",
+          "item": [
+            {
+              "name": "GET /api/templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/templates?workspaceId={{workspaceId}}"
+              }
+            },
+            {
+              "name": "POST /api/templates",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Quarterly planning\",\n  \"description\": \"Starter\",\n  \"configJson\": {},\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/templates"
+              }
+            },
+            {
+              "name": "GET /api/templates/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/templates/{{templateId}}"
+              }
+            },
+            {
+              "name": "POST /api/templates/:id/create-roadmap",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"From template\",\n  \"slug\": \"from-template-1\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\"\n}"
+                },
+                "url": "http://localhost:4000/api/templates/{{templateId}}/create-roadmap"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Imports",
+          "item": [
+            {
+              "name": "GET /api/imports",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/imports?limit=25"
+              }
+            },
+            {
+              "name": "POST /api/imports/workbook",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": []
+                    },
+                    {
+                      "key": "workspaceId",
+                      "value": "{{workspaceId}}",
+                      "type": "text"
+                    }
+                  ]
+                },
+                "url": "http://localhost:4000/api/imports/workbook"
+              }
+            },
+            {
+              "name": "GET /api/imports/:id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/imports/{{importBatchId}}"
+              }
+            },
+            {
+              "name": "GET /api/imports/:id/errors",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/imports/{{importBatchId}}/errors"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Integrations & external links",
+          "item": [
+            {
+              "name": "GET /api/integrations",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/integrations?workspaceId={{workspaceId}}"
+              }
+            },
+            {
+              "name": "POST /api/integrations/jira/connect",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": { \"baseUrl\": \"https://example.atlassian.net\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/integrations/jira/connect"
+              }
+            },
+            {
+              "name": "POST /api/integrations/confluence/connect",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connectionName\": \"Confluence\",\n  \"config\": { \"spaceKey\": \"TEAM\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": "http://localhost:4000/api/integrations/confluence/connect"
+              }
+            },
+            {
+              "name": "POST /api/integrations/:id/sync",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
+                "url": "http://localhost:4000/api/integrations/{{integrationId}}/sync"
+              }
+            },
+            {
+              "name": "GET /api/external-links",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4000/api/external-links?workspaceId={{workspaceId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "AI",
+          "item": [
+            {
+              "name": "POST /api/ai/generate-initiative-objective",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"initiativeName\": \"Unified analytics\",\n  \"context\": \"B2B SaaS\"\n}"
+                },
+                "url": "http://localhost:4000/api/ai/generate-initiative-objective"
+              }
+            },
+            {
+              "name": "POST /api/ai/summarize-roadmap",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"2026 Roadmap\",\n  \"items\": [{ \"name\": \"Launch v2\", \"status\": \"in_progress\" }]\n}"
+                },
+                "url": "http://localhost:4000/api/ai/summarize-roadmap"
+              }
+            },
+            {
+              "name": "POST /api/ai/classify-theme",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"text\": \"Improve onboarding completion\",\n  \"candidateThemes\": [\"Growth\", \"Platform\"]\n}"
+                },
+                "url": "http://localhost:4000/api/ai/classify-theme"
+              }
+            },
+            {
+              "name": "POST /api/ai/quality-check",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"text\": \"We will improve the product.\",\n  \"criteria\": [\"measurable outcomes\"]\n}"
+                },
+                "url": "http://localhost:4000/api/ai/quality-check"
+              }
+            },
+            {
+              "name": "POST /api/ai/executive-summary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bundle\": {\n    \"roadmapName\": \"2026 Plan\",\n    \"planningYear\": 2026,\n    \"themes\": [\n      {\n        \"name\": \"Platform\",\n        \"pillarObjective\": \"Reliable foundations\",\n        \"orderIndex\": 0,\n        \"initiatives\": [\n          {\n            \"name\": \"API hardening\",\n            \"shortObjective\": \"Reduce incidents\",\n            \"detailedObjective\": null,\n            \"phaseHealth\": { \"totalPhases\": 3, \"byStatus\": { \"done\": 1, \"in_progress\": 2 } }\n          }\n        ]\n      }\n    ],\n    \"ungroupedInitiatives\": []\n  }\n}"
+                },
+                "url": "http://localhost:4000/api/ai/executive-summary"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "B · Direct services & internal",
+      "description": "Bypass gateway or call internal HTTP (worker, imports). Same IDs as section A.",
+      "item": [
+        {
+          "name": "portfolio :4100",
+          "item": [
+            {
+              "name": "Health",
+              "item": [
+                {
+                  "name": "GET /health",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/health"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Internal",
+              "item": [
+                {
+                  "name": "GET /internal/default-workspace-id",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-internal-key",
+                        "value": "{{internalApiKey}}",
+                        "type": "text"
+                      }
+                    ],
+                    "url": "http://localhost:4100/internal/default-workspace-id"
+                  }
+                },
+                {
+                  "name": "POST /internal/imports/:id/worker-complete",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-internal-key",
+                        "value": "{{internalApiKey}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"message\": \"Stub completion from Postman\"\n}"
+                    },
+                    "url": "http://localhost:4100/internal/imports/{{importBatchId}}/worker-complete"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Roadmaps",
+              "item": [
+                {
+                  "name": "GET /workspaces",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/workspaces"
+                  }
+                },
+                {
+                  "name": "GET /roadmaps",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps"
+                  }
+                },
+                {
+                  "name": "POST /roadmaps",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"FY26 Product\",\n  \"slug\": \"fy26-product\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/roadmaps"
+                  }
+                },
+                {
+                  "name": "GET /roadmaps/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /roadmaps/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"status\": \"active\"\n}"
+                    },
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}"
+                  }
+                },
+                {
+                  "name": "POST /roadmaps/:id/clone",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"FY26 Copy\",\n  \"slug\": \"fy26-product-copy\"\n}"
+                    },
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/clone"
+                  }
+                },
+                {
+                  "name": "POST /roadmaps/:id/archive",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/archive"
+                  }
+                },
+                {
+                  "name": "GET /roadmaps/:id/items",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/items"
+                  }
+                },
+                {
+                  "name": "POST /roadmaps/:id/items",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"medium\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-06-30\",\n  \"sortOrder\": 0\n}"
+                    },
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/items"
+                  }
+                },
+                {
+                  "name": "GET /roadmaps/:id/themes",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/themes"
+                  }
+                },
+                {
+                  "name": "POST /roadmaps/:id/themes",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Growth\",\n  \"objective\": \"Expand revenue\",\n  \"colorToken\": \"blue\",\n  \"orderIndex\": 0\n}"
+                    },
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/themes"
+                  }
+                },
+                {
+                  "name": "GET /roadmaps/:id/executive-summary",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/executive-summary"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Roadmap items",
+              "item": [
+                {
+                  "name": "GET /roadmap-items",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmap-items"
+                  }
+                },
+                {
+                  "name": "POST /roadmap-items",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"low\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-03-31\",\n  \"sortOrder\": 1\n}"
+                    },
+                    "url": "http://localhost:4100/roadmap-items"
+                  }
+                },
+                {
+                  "name": "GET /roadmap-items/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/roadmap-items/{{itemId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /roadmap-items/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"status\": \"in_progress\"\n}"
+                    },
+                    "url": "http://localhost:4100/roadmap-items/{{itemId}}"
+                  }
+                },
+                {
+                  "name": "POST /roadmap-items/:id/move",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"sortOrder\": 10\n}"
+                    },
+                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/move"
+                  }
+                },
+                {
+                  "name": "POST /roadmap-items/:id/phases",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
+                    },
+                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/phases"
+                  }
+                },
+                {
+                  "name": "PUT /roadmap-items/:id/teams",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"teamIds\": [\"{{teamId}}\"]\n}"
+                    },
+                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/teams"
+                  }
+                },
+                {
+                  "name": "PATCH /phase-segments/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"status\": \"In Progress\",\n  \"capacityAllocationEstimate\": 0.25,\n  \"sprintEstimate\": 3,\n  \"jiraKey\": \"PROJ-123\",\n  \"notes\": \"Updated via Postman\"\n}"
+                    },
+                    "url": "http://localhost:4100/phase-segments/{{phaseSegmentId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Initiatives",
+              "item": [
+                {
+                  "name": "GET /initiatives",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/initiatives"
+                  }
+                },
+                {
+                  "name": "POST /initiatives",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"canonicalName\": \"Self-serve onboarding\",\n  \"shortObjective\": \"Reduce time-to-value\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/initiatives"
+                  }
+                },
+                {
+                  "name": "GET /initiatives/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /initiatives/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"notes\": \"Updated via Postman\",\n  \"businessSponsorId\": \"{{businessSponsorId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                  }
+                },
+                {
+                  "name": "DELETE /initiatives/:id",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                  }
+                },
+                {
+                  "name": "POST /initiatives/:id/themes",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"strategicThemeId\": \"{{themeId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/themes"
+                  }
+                },
+                {
+                  "name": "PUT /initiatives/:id/theme-links",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"strategicThemeIds\": [\"{{themeId}}\"]\n}"
+                    },
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/theme-links"
+                  }
+                },
+                {
+                  "name": "DELETE /initiatives/:id/themes/:themeId",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/themes/{{themeId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Themes",
+              "item": [
+                {
+                  "name": "GET /themes",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/themes"
+                  }
+                },
+                {
+                  "name": "POST /themes",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Platform\",\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"orderIndex\": 0\n}"
+                    },
+                    "url": "http://localhost:4100/themes"
+                  }
+                },
+                {
+                  "name": "GET /themes/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/themes/{{themeId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /themes/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"objective\": \"Reliability and scale\"\n}"
+                    },
+                    "url": "http://localhost:4100/themes/{{themeId}}"
+                  }
+                },
+                {
+                  "name": "DELETE /themes/:id",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": "http://localhost:4100/themes/{{themeId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Teams",
+              "item": [
+                {
+                  "name": "GET /teams",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/teams"
+                  }
+                },
+                {
+                  "name": "POST /teams",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Platform squad\",\n  \"kind\": \"squad\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/teams"
+                  }
+                },
+                {
+                  "name": "GET /teams/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/teams/{{teamId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /teams/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"active\": false\n}"
+                    },
+                    "url": "http://localhost:4100/teams/{{teamId}}"
+                  }
+                },
+                {
+                  "name": "DELETE /teams/:id",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": "http://localhost:4100/teams/{{teamId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Business sponsors",
+              "item": [
+                {
+                  "name": "GET /business-sponsors",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/business-sponsors"
+                  }
+                },
+                {
+                  "name": "POST /business-sponsors",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"displayName\": \"Jane Exec\",\n  \"email\": \"jane@example.com\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4100/business-sponsors"
+                  }
+                },
+                {
+                  "name": "GET /business-sponsors/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                  }
+                },
+                {
+                  "name": "PATCH /business-sponsors/:id",
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"title\": \"VP Product\"\n}"
+                    },
+                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                  }
+                },
+                {
+                  "name": "DELETE /business-sponsors/:id",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Imports",
+              "item": [
+                {
+                  "name": "GET /imports",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/imports?limit=25"
+                  }
+                },
+                {
+                  "name": "POST /imports/workbook",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "file",
+                          "type": "file",
+                          "src": []
+                        },
+                        {
+                          "key": "workspaceId",
+                          "value": "{{workspaceId}}",
+                          "type": "text"
+                        }
+                      ]
+                    },
+                    "url": "http://localhost:4100/imports/workbook"
+                  }
+                },
+                {
+                  "name": "GET /imports/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/imports/{{importBatchId}}"
+                  }
+                },
+                {
+                  "name": "GET /imports/:id/errors",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4100/imports/{{importBatchId}}/errors"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "template :4200",
+          "item": [
+            {
+              "name": "Health",
+              "item": [
+                {
+                  "name": "GET /health",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4200/health"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Templates",
+              "item": [
+                {
+                  "name": "GET /templates",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4200/templates?workspaceId={{workspaceId}}"
+                  }
+                },
+                {
+                  "name": "POST /templates",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Quarterly planning\",\n  \"description\": \"Starter structure\",\n  \"configJson\": {},\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4200/templates"
+                  }
+                },
+                {
+                  "name": "GET /templates/:id",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4200/templates/{{templateId}}"
+                  }
+                },
+                {
+                  "name": "POST /templates/:id/create-roadmap",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"From template\",\n  \"slug\": \"from-template-1\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\"\n}"
+                    },
+                    "url": "http://localhost:4200/templates/{{templateId}}/create-roadmap"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Internal",
+              "item": [
+                {
+                  "name": "DELETE /internal/workspaces/:workspaceId/templates",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "x-internal-key",
+                        "value": "{{internalApiKey}}",
+                        "type": "text"
+                      }
+                    ],
+                    "url": "http://localhost:4200/internal/workspaces/{{workspaceId}}/templates"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "integration :4400",
+          "item": [
+            {
+              "name": "Meta",
+              "item": [
+                {
+                  "name": "GET /",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4400/"
+                  }
+                },
+                {
+                  "name": "GET /health",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4400/health"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Integrations",
+              "item": [
+                {
+                  "name": "GET /integrations",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4400/integrations?workspaceId={{workspaceId}}"
+                  }
+                },
+                {
+                  "name": "POST /integrations/jira/connect",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": { \"baseUrl\": \"https://example.atlassian.net\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4400/integrations/jira/connect"
+                  }
+                },
+                {
+                  "name": "POST /integrations/confluence/connect",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"connectionName\": \"Confluence\",\n  \"config\": { \"spaceKey\": \"TEAM\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                    },
+                    "url": "http://localhost:4400/integrations/confluence/connect"
+                  }
+                },
+                {
+                  "name": "POST /integrations/:id/sync",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{}"
+                    },
+                    "url": "http://localhost:4400/integrations/{{integrationId}}/sync"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "External links",
+              "item": [
+                {
+                  "name": "GET /external-links",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4400/external-links?workspaceId={{workspaceId}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Internal",
+              "item": [
+                {
+                  "name": "POST /internal/external-links",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-internal-key",
+                        "value": "{{internalApiKey}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"entityType\": \"roadmap_item\",\n  \"entityId\": \"item-uuid\",\n  \"provider\": \"jira\",\n  \"externalId\": \"PROJ-1\",\n  \"externalUrl\": \"https://jira.example/browse/PROJ-1\",\n  \"syncState\": \"linked\"\n}"
+                    },
+                    "url": "http://localhost:4400/internal/external-links"
+                  }
+                },
+                {
+                  "name": "DELETE /internal/workspaces/:workspaceId/external-links",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "x-internal-key",
+                        "value": "{{internalApiKey}}",
+                        "type": "text"
+                      }
+                    ],
+                    "url": "http://localhost:4400/internal/workspaces/{{workspaceId}}/external-links"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "ai :4300",
+          "item": [
+            {
+              "name": "Health",
+              "item": [
+                {
+                  "name": "GET /health",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "http://localhost:4300/health"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "AI",
+              "item": [
+                {
+                  "name": "POST /ai/generate-initiative-objective",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"initiativeName\": \"Unified analytics\",\n  \"context\": \"B2B SaaS, Q2 focus\"\n}"
+                    },
+                    "url": "http://localhost:4300/ai/generate-initiative-objective"
+                  }
+                },
+                {
+                  "name": "POST /ai/summarize-roadmap",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"title\": \"2026 Roadmap\",\n  \"items\": [\n    { \"name\": \"Launch v2\", \"status\": \"in_progress\", \"notes\": \"API freeze April\" }\n  ]\n}"
+                    },
+                    "url": "http://localhost:4300/ai/summarize-roadmap"
+                  }
+                },
+                {
+                  "name": "POST /ai/classify-theme",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"text\": \"Improve onboarding completion and reduce support tickets\",\n  \"candidateThemes\": [\"Growth\", \"Platform\", \"Customer experience\"]\n}"
+                    },
+                    "url": "http://localhost:4300/ai/classify-theme"
+                  }
+                },
+                {
+                  "name": "POST /ai/quality-check",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"text\": \"We will improve the product this year.\",\n  \"criteria\": [\"measurable outcomes\", \"customer value\"]\n}"
+                    },
+                    "url": "http://localhost:4300/ai/quality-check"
+                  }
+                },
+                {
+                  "name": "POST /ai/executive-summary",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"bundle\": {\n    \"roadmapName\": \"2026 Plan\",\n    \"planningYear\": 2026,\n    \"themes\": [\n      {\n        \"name\": \"Platform\",\n        \"pillarObjective\": \"Reliable foundations\",\n        \"orderIndex\": 0,\n        \"initiatives\": [\n          {\n            \"name\": \"API hardening\",\n            \"shortObjective\": \"Reduce incidents\",\n            \"detailedObjective\": null,\n            \"phaseHealth\": { \"totalPhases\": 3, \"byStatus\": { \"done\": 1, \"in_progress\": 2 } }\n          }\n        ]\n      }\n    ],\n    \"ungroupedInitiatives\": []\n  }\n}"
+                    },
+                    "url": "http://localhost:4300/ai/executive-summary"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "worker :4500",
+          "item": [
+            {
+              "name": "GET /health",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4500/health"
+              }
+            },
+            {
+              "name": "GET /",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "http://localhost:4500/"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

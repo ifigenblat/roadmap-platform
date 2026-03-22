@@ -1,0 +1,242 @@
+openapi: 3.1.0
+info:
+  title: Roadmap Platform API
+  version: 0.1.0
+  description: |
+    External REST API (BFF prefix `/api`). See `docs/05-api-contracts.md`.
+
+    **Domain rules (P4):** Roadmap items reject initiative/roadmap pairs from different workspaces.
+    Strategic themes with a `roadmapId` must target a roadmap in the same workspace. Initiative
+    sponsors must belong to the initiative workspace. List endpoints support optional `?workspaceId=`
+    for tenant-scoped reads.
+servers:
+  - url: http://localhost:4000/api
+    description: Local API gateway
+tags:
+  - name: Workspaces
+  - name: Roadmaps
+  - name: RoadmapItems
+  - name: Initiatives
+  - name: Themes
+  - name: Templates
+  - name: Imports
+  - name: Integrations
+  - name: AI
+paths:
+  /workspaces:
+    get:
+      tags: [Workspaces]
+      summary: List workspaces
+    post:
+      tags: [Workspaces]
+      summary: Create workspace
+  /workspaces/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Workspaces]
+      summary: Update workspace
+    delete:
+      tags: [Workspaces]
+      summary: Delete empty workspace (cannot delete slug `default` or if data exists)
+  /roadmaps:
+    get:
+      tags: [Roadmaps]
+      summary: List roadmaps
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter to roadmaps in this workspace.
+    post:
+      tags: [Roadmaps]
+      summary: Create roadmap
+  /roadmaps/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Roadmaps]
+      summary: Get roadmap with items
+    patch:
+      tags: [Roadmaps]
+      summary: Partial update roadmap
+  /roadmaps/{id}/items:
+    get:
+      tags: [RoadmapItems]
+      summary: List items on roadmap
+    post:
+      tags: [RoadmapItems]
+      summary: Add item to roadmap
+  /roadmaps/{id}/themes:
+    get:
+      tags: [Themes]
+      summary: List themes scoped to roadmap
+    post:
+      tags: [Themes]
+      summary: Create theme on roadmap
+  /roadmaps/{id}/clone:
+    post:
+      tags: [Roadmaps]
+      summary: Clone roadmap
+  /roadmaps/{id}/archive:
+    post:
+      tags: [Roadmaps]
+      summary: Archive roadmap
+  /roadmaps/{id}/executive-summary:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Roadmaps]
+      summary: Executive summary (themes, initiatives, phase health) for deck export
+  /roadmap-items/{id}:
+    get:
+      tags: [RoadmapItems]
+      summary: Get roadmap item
+    patch:
+      tags: [RoadmapItems]
+      summary: Update roadmap item
+  /roadmap-items/{id}/move:
+    post:
+      tags: [RoadmapItems]
+      summary: Move / reorder item
+  /roadmap-items/{id}/phases:
+    post:
+      tags: [RoadmapItems]
+      summary: Add phase segment
+  /roadmap-items/{id}/teams:
+    put:
+      tags: [RoadmapItems]
+      summary: Replace team assignments on roadmap item
+  /phase-segments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [RoadmapItems]
+      summary: Update phase segment
+  /initiatives:
+    get:
+      tags: [Initiatives]
+      summary: List initiatives
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter to initiatives in this workspace.
+    post:
+      tags: [Initiatives]
+      summary: Create initiative
+  /initiatives/{id}/theme-links:
+    put:
+      tags: [Initiatives]
+      summary: Replace initiative strategic theme links
+  /initiatives/{id}:
+    get:
+      tags: [Initiatives]
+      summary: Get initiative
+    patch:
+      tags: [Initiatives]
+      summary: Update initiative
+  /themes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Themes]
+      summary: Get strategic theme with linked initiatives
+    patch:
+      tags: [Themes]
+      summary: Update strategic theme
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List templates
+    post:
+      tags: [Templates]
+      summary: Create template
+  /templates/{id}:
+    get:
+      tags: [Templates]
+      summary: Get template
+  /templates/{id}/create-roadmap:
+    post:
+      tags: [Templates]
+      summary: Instantiate roadmap from template
+  /imports/workbook:
+    post:
+      tags: [Imports]
+      summary: Upload workbook (multipart field `file`)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                workspaceId:
+                  type: string
+  /imports/{id}:
+    get:
+      tags: [Imports]
+      summary: Get import batch
+  /imports/{id}/errors:
+    get:
+      tags: [Imports]
+      summary: Non-success row results
+  /integrations:
+    get:
+      tags: [Integrations]
+      summary: List integration connections
+  /integrations/jira/connect:
+    post:
+      tags: [Integrations]
+      summary: Register Jira connection
+  /integrations/confluence/connect:
+    post:
+      tags: [Integrations]
+      summary: Register Confluence connection
+  /integrations/{id}/sync:
+    post:
+      tags: [Integrations]
+      summary: Record sync (stub)
+  /external-links:
+    get:
+      tags: [Integrations]
+      summary: List external links
+  /ai/generate-initiative-objective:
+    post:
+      tags: [AI]
+      summary: Generate initiative objective
+  /ai/summarize-roadmap:
+    post:
+      tags: [AI]
+      summary: Summarize roadmap
+  /ai/classify-theme:
+    post:
+      tags: [AI]
+      summary: Classify theme
+  /ai/quality-check:
+    post:
+      tags: [AI]
+      summary: Quality check text
+  /ai/executive-summary:
+    post:
+      tags: [AI]
+      summary: Generate executive narrative from executive-summary bundle JSON

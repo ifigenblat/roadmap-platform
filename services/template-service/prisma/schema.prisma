@@ -1,0 +1,22 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("TEMPLATE_DATABASE_URL")
+}
+
+/// Templates are keyed by portfolio workspace id (opaque string; no cross-DB FK).
+model Template {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  configJson  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("svc_template_templates")
+}

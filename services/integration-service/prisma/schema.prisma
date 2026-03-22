@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("INTEGRATION_DATABASE_URL")
+}
+
+/// Opaque portfolio workspace id (no cross-service FK).
+model IntegrationConnection {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  provider        String
+  connectionName  String
+  configEncrypted String
+  status          String
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("svc_integration_connections")
+}
+
+model ExternalLink {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  entityType   String
+  entityId     String
+  provider     String
+  externalId   String
+  externalUrl  String
+  syncState    String
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId, entityType, entityId])
+  @@map("svc_integration_external_links")
+}

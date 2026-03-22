@@ -1,0 +1,1 @@
+Shared config presets live here. **Environment variables** are documented in the **repo root** `.env.example` and loaded from **root `.env`** in each service entrypoint (see `services/*/src/index.ts`).

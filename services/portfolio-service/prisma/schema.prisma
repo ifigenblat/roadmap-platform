@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PORTFOLIO_DATABASE_URL")
+}
+
+enum RoadmapStatus {
+  draft
+  active
+  archived
+}
+
+enum ItemStatus {
+  not_started
+  in_progress
+  at_risk
+  done
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+model Workspace {
+  id                String            @id @default(cuid())
+  name              String
+  slug              String            @unique
+  roadmaps          Roadmap[]
+  initiatives       Initiative[]
+  themes            StrategicTheme[]
+  imports           ImportBatch[]
+  teams             Team[]
+  businessSponsors  BusinessSponsor[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model BusinessSponsor {
+  id          String       @id @default(cuid())
+  workspaceId String
+  displayName String
+  email       String?
+  title       String?
+  department  String?
+  notes       String?
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  initiatives Initiative[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Roadmap {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  /// Reference to template-service template id (no DB FK).
+  templateId   String?
+  name         String
+  slug         String         @unique
+  description  String?
+  planningYear Int
+  startDate    DateTime
+  endDate      DateTime
+  status       RoadmapStatus  @default(draft)
+  ownerUserId  String?
+  archivedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id])
+  items        RoadmapItem[]
+  strategicThemes StrategicTheme[]
+  importBatches   ImportBatch[]
+}
+
+model StrategicTheme {
+  id          String            @id @default(cuid())
+  workspaceId String
+  roadmapId   String?
+  name        String
+  objective   String?
+  orderIndex  Int               @default(0)
+  colorToken  String?
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id])
+  roadmap     Roadmap?          @relation(fields: [roadmapId], references: [id], onDelete: SetNull)
+  initiatives InitiativeTheme[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Initiative {
+  id                 String            @id @default(cuid())
+  workspaceId        String
+  canonicalName      String
+  shortObjective     String?
+  detailedObjective  String?
+  // Legacy free-text sponsor label (imports, quick edits).
+  businessSponsor    String?
+  businessSponsorId  String?
+  ownerUserId        String?
+  type               String?
+  notes              String?
+  sourceSystem       String?
+  sourceReference    String?
+  workspace          Workspace         @relation(fields: [workspaceId], references: [id])
+  sponsor            BusinessSponsor?  @relation(fields: [businessSponsorId], references: [id])
+  roadmapItems       RoadmapItem[]
+  themes             InitiativeTheme[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+model InitiativeTheme {
+  initiativeId     String
+  strategicThemeId String
+  initiative       Initiative     @relation(fields: [initiativeId], references: [id])
+  strategicTheme   StrategicTheme @relation(fields: [strategicThemeId], references: [id])
+  @@id([initiativeId, strategicThemeId])
+}
+
+model RoadmapItem {
+  id            String         @id @default(cuid())
+  roadmapId     String
+  initiativeId  String
+  titleOverride String?
+  status        ItemStatus     @default(not_started)
+  priority      Priority       @default(medium)
+  confidence    Int?
+  riskLevel     String?
+  targetOutcome String?
+  startDate     DateTime
+  endDate       DateTime
+  laneKey       String?
+  sortOrder     Int            @default(0)
+  roadmap       Roadmap        @relation(fields: [roadmapId], references: [id])
+  initiative    Initiative     @relation(fields: [initiativeId], references: [id])
+  phases        PhaseSegment[]
+  teams         RoadmapItemTeam[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model PhaseSegment {
+  id                         String   @id @default(cuid())
+  roadmapItemId              String
+  phaseName                  String
+  startDate                  DateTime
+  endDate                    DateTime
+  capacityAllocationEstimate Float?
+  sprintEstimate             Float?
+  teamSummary                String?
+  status                     String?
+  jiraKey                    String?
+  notes                      String?
+  roadmapItem                RoadmapItem @relation(fields: [roadmapItemId], references: [id])
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model Team {
+  id          String            @id @default(cuid())
+  workspaceId String
+  name        String
+  kind        String?
+  active      Boolean           @default(true)
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id])
+  roadmapItems RoadmapItemTeam[]
+}
+
+model RoadmapItemTeam {
+  roadmapItemId String
+  teamId        String
+  roadmapItem   RoadmapItem @relation(fields: [roadmapItemId], references: [id])
+  team          Team        @relation(fields: [teamId], references: [id])
+  @@id([roadmapItemId, teamId])
+}
+
+model ImportBatch {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  roadmapId      String?
+  sourceFileName String
+  importerType   String
+  status         String
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+  summaryJson    Json?
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  roadmap        Roadmap? @relation(fields: [roadmapId], references: [id], onDelete: SetNull)
+  rowResults     ImportRowResult[]
+}
+
+model ImportRowResult {
+  id             String      @id @default(cuid())
+  importBatchId  String
+  sheetName      String
+  rowNumber      Int
+  entityType     String
+  entityKey      String
+  status         String
+  message        String?
+  rawPayloadJson Json?
+  importBatch    ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@index([importBatchId])
+}
