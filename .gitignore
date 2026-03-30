@@ -9,7 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
-apps/web/.next
+client/dist
 
 # Prisma clients (regenerated per service on `prisma generate`)
 services/*/src/generated/prisma
@@ -19,6 +19,11 @@ dist-ssr
 .npm-cache
 .turbo
 pnpm-debug.log*
+
+# Tooling / local artifacts (not app source)
+.ai/
+**/__pycache__/
+.venv-excel/
 
 # Editor directories and files
 .vscode/*

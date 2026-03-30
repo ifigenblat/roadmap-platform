@@ -1,13 +1,14 @@
-# Roadmap Platform Package
+# Roadmap Platform
 
-This package is a production-oriented starting point for building a roadmap management platform based on the uploaded spreadsheet workflow.
+This package is a production-oriented starting point for **Roadmap Platform**, based on the uploaded spreadsheet workflow.
 
 It includes:
+- **`docs/00-implementation-status.md`** — what is built in the repo today (read this for current truth)
 - product and architecture documents
 - a phased implementation plan
 - AI feature design
 - integration strategy for Jira / Confluence / SDLC tools
-- a starter monorepo scaffold with Docker and service boundaries
+- a starter monorepo scaffold with Docker and service boundaries (Vite React `client/`, CommonJS `services/gateway`, shared Sequelize `services/shared/postgres`)
 - Cursor-ready prompts and build sequence
 
 ## Your current spreadsheet model, translated

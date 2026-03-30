@@ -26,11 +26,13 @@ export type GridRoadmapItem = {
     notes?: string | null;
     sourceSystem?: string | null;
     sourceReference?: string | null;
-    themes?: Array<{ strategicTheme: { id: string; name: string } }>;
+    themes?: Array<{ strategicTheme: { id: string; name: string; colorToken?: string | null } }>;
   };
   phases: Array<{
     id: string;
     phaseName: string;
+    phaseDefinitionId?: string | null;
+    phaseDefinition?: { id: string; name: string } | null;
     capacityAllocationEstimate?: number | null;
     sprintEstimate?: number | null;
     startDate: string;
@@ -42,8 +44,9 @@ export type GridRoadmapItem = {
   teams: Array<{ team: { id: string; name: string } }>;
 };
 
-type TeamRow = { id: string; name: string; workspaceId: string };
-type ThemeRow = { id: string; name: string };
+type TeamRow = { id: string; name: string };
+type ThemeRow = { id: string; name: string; colorToken?: string | null };
+type PhaseDefRow = { id: string; name: string };
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,6 +57,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     loadJson<ThemeRow[]>(`/api/roadmaps/${id}/themes`),
   ]);
 
+  const workspaceId = roadmapRes.ok ? roadmapRes.data.workspaceId : "";
+  const phasesRes = roadmapRes.ok
+    ? await loadJson<PhaseDefRow[]>(
+        `/api/phase-definitions?workspaceId=${encodeURIComponent(workspaceId)}`
+      )
+    : { ok: true as const, data: [] as PhaseDefRow[] };
+
   const warning = !roadmapRes.ok
     ? roadmapRes.message
     : !itemsRes.ok
@@ -62,13 +72,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         ? teamsRes.message
         : !themesRes.ok
           ? themesRes.message
-          : "";
+          : !phasesRes.ok
+            ? phasesRes.message
+            : "";
 
-  const workspaceId = roadmapRes.ok ? roadmapRes.data.workspaceId : "";
-  const workspaceTeams =
-    roadmapRes.ok && teamsRes.ok
-      ? teamsRes.data.filter((t) => t.workspaceId === workspaceId)
-      : [];
+  const workspaceTeams = roadmapRes.ok && teamsRes.ok ? teamsRes.data : [];
+  const workspacePhases = phasesRes.ok ? phasesRes.data : [];
 
   return (
     <AppLayout>
@@ -106,6 +115,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         roadmapName={roadmapRes.ok ? roadmapRes.data.name : "Roadmap"}
         initial={itemsRes.ok ? itemsRes.data : []}
         workspaceTeams={workspaceTeams}
+        workspacePhases={workspacePhases}
         roadmapThemes={themesRes.ok ? themesRes.data : []}
       />
     </AppLayout>

@@ -5,6 +5,7 @@ import { FormModal, ModalActions, modalFieldClass } from "../../../components/fo
 import { PageToolbar } from "../../../components/page-toolbar";
 import { sendJson } from "../../../lib/api";
 import { ToastViewport, useToasts } from "../../../lib/toast";
+import { WorkspaceSelectField } from "../../../components/workspace-select-field";
 
 type IntegrationRow = {
   id: string;
@@ -14,7 +15,15 @@ type IntegrationRow = {
   lastSyncAt?: string | null;
 };
 
-export function IntegrationsClient({ initial }: { initial: IntegrationRow[] }) {
+type WorkspaceOption = { id: string; name: string; slug: string };
+
+export function IntegrationsClient({
+  initial,
+  workspaces,
+}: {
+  initial: IntegrationRow[];
+  workspaces: WorkspaceOption[];
+}) {
   const [rows, setRows] = useState(initial);
   const [provider, setProvider] = useState<"jira" | "confluence">("jira");
   const [connectionName, setConnectionName] = useState("");
@@ -45,6 +54,7 @@ export function IntegrationsClient({ initial }: { initial: IntegrationRow[] }) {
       );
       setRows((prev) => [created, ...prev]);
       setConnectionName("");
+      setWorkspaceId("");
       setConnectOpen(false);
       push("Integration connection created.");
     } catch (err) {
@@ -197,14 +207,14 @@ export function IntegrationsClient({ initial }: { initial: IntegrationRow[] }) {
               required
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-400">Workspace ID (optional)</span>
-            <input
-              className={modalFieldClass}
-              value={workspaceId}
-              onChange={(e) => setWorkspaceId(e.target.value)}
-            />
-          </label>
+          <WorkspaceSelectField
+            label="Workspace (optional)"
+            value={workspaceId}
+            onChange={setWorkspaceId}
+            workspaces={workspaces}
+            optional
+            disabled={busy}
+          />
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-slate-400">Config JSON</span>
             <textarea

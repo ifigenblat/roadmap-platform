@@ -109,5 +109,5 @@ app.post("/templates/:id/create-roadmap", async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT || 4200);
+const port = Number(process.env.PORT || 4210);
 app.listen(port, () => console.log(`template-service listening on ${port}`));

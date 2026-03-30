@@ -1,9 +1,9 @@
 # Cursor Prompts
 
 ## Prompt 1: bootstrap monorepo
-Create an npm workspaces monorepo called `roadmap-platform-starter` with:
-- apps/web (Next.js)
-- services/api-gateway
+Create an npm workspaces monorepo for **Roadmap Platform** (package name `roadmap-platform-starter`) with:
+- client (Vite + React SPA)
+- services/gateway
 - services/portfolio-service
 - services/template-service
 - services/integration-service
@@ -11,7 +11,6 @@ Create an npm workspaces monorepo called `roadmap-platform-starter` with:
 - services/worker
 - packages/shared
 - packages/events
-- packages/config
 - packages/ui
 
 Add Docker Compose for Postgres, Redis, and MinIO.
@@ -26,7 +25,7 @@ Implement the core portfolio domain with Prisma models and REST routes for:
 - phase segments
 
 ## Prompt 3: timeline UI
-Build a timeline view in the Next.js app that:
+Build a timeline view in the Vite React app (`client/`) that:
 - groups by theme or team
 - shows phase segments as bars
 - supports quarter and month zoom

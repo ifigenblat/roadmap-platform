@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { DatePickerField } from "../../components/date-picker-field";
 import { FormModal, ModalActions, modalFieldClass } from "../../components/form-modal";
 import { PageToolbar } from "../../components/page-toolbar";
 import { sendJson } from "../../lib/api";
 import { ToastViewport, useToasts } from "../../lib/toast";
+import { WorkspaceSelectField } from "../../components/workspace-select-field";
 
 type TemplateRow = {
   id: string;
@@ -25,7 +27,15 @@ function slugify(s: string): string {
 
 type CreatedRoadmap = { id: string; name?: string };
 
-export function TemplatesClient({ initial }: { initial: TemplateRow[] }) {
+type WorkspaceOption = { id: string; name: string; slug: string };
+
+export function TemplatesClient({
+  initial,
+  workspaces,
+}: {
+  initial: TemplateRow[];
+  workspaces: WorkspaceOption[];
+}) {
   const router = useRouter();
   const [rows, setRows] = useState(initial);
   const [name, setName] = useState("");
@@ -78,6 +88,7 @@ export function TemplatesClient({ initial }: { initial: TemplateRow[] }) {
       setRows((prev) => [created, ...prev]);
       setName("");
       setDescription("");
+      setWorkspaceId("");
       setConfigJsonText("{}");
       setCreateTemplateOpen(false);
       push("Template created.");
@@ -170,14 +181,16 @@ export function TemplatesClient({ initial }: { initial: TemplateRow[] }) {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm md:col-span-2">
-              <span className="text-slate-400">Workspace ID (optional)</span>
-              <input
-                className={modalFieldClass}
+            <div className="md:col-span-2">
+              <WorkspaceSelectField
+                label="Workspace (optional)"
                 value={workspaceId}
-                onChange={(e) => setWorkspaceId(e.target.value)}
+                onChange={setWorkspaceId}
+                workspaces={workspaces}
+                optional
+                disabled={busy}
               />
-            </label>
+            </div>
           </div>
           <label className="flex flex-col gap-1 text-sm text-slate-400">
             <span>Optional config JSON</span>
@@ -242,26 +255,20 @@ export function TemplatesClient({ initial }: { initial: TemplateRow[] }) {
                 required
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-400">Start date</span>
-              <input
-                type="date"
-                className={modalFieldClass}
-                value={crStart}
-                onChange={(e) => setCrStart(e.target.value)}
-                required
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-slate-400">End date</span>
-              <input
-                type="date"
-                className={modalFieldClass}
-                value={crEnd}
-                onChange={(e) => setCrEnd(e.target.value)}
-                required
-              />
-            </label>
+            <DatePickerField
+              label="Start date"
+              value={crStart}
+              onChange={setCrStart}
+              disabled={createBusy}
+              required
+            />
+            <DatePickerField
+              label="End date"
+              value={crEnd}
+              onChange={setCrEnd}
+              disabled={createBusy}
+              required
+            />
           </div>
           <ModalActions>
             <button

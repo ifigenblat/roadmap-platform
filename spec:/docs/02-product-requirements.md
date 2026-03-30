@@ -98,3 +98,7 @@ The MVP should let you stop managing roadmaps primarily in spreadsheets.
 - user can import an existing spreadsheet workbook
 - user can manage themes, initiatives, and timeline data in-app
 - user can publish a timeline view that replaces the spreadsheet roadmap tab
+
+## Current build vs this document
+
+The bullets above remain the **MVP bar**. The codebase today includes substantial **partial** implementation: multi-roadmap and initiative/theme CRUD, spreadsheet import, grid and timeline roadmap views, workspace phase definitions, structured business sponsors, theme color tokens, executive summary data from the API, per-workspace AI settings, and Jira Cloud connection + sync verification via the official REST API. Items such as **global search**, **comments / activity**, **role-based permissions**, and **PNG/PDF/CSV export** are not described as complete in the implementation snapshot — see **`00-implementation-status.md`**.

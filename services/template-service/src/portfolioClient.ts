@@ -1,6 +1,6 @@
 /** Resolve default portfolio workspace id (portfolio must be up). */
 export async function fetchDefaultWorkspaceId(): Promise<string> {
-  const base = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4100";
+  const base = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4110";
   const key = process.env.INTERNAL_API_KEY || "";
   const res = await fetch(`${base}/internal/default-workspace-id`, {
     headers: { "x-internal-key": key },
@@ -15,7 +15,7 @@ export async function fetchDefaultWorkspaceId(): Promise<string> {
 }
 
 export async function createRoadmapInPortfolio(body: Record<string, unknown>) {
-  const base = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4100";
+  const base = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4110";
   const res = await fetch(`${base}/roadmaps`, {
     method: "POST",
     headers: { "content-type": "application/json" },

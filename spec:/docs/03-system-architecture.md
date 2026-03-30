@@ -12,22 +12,16 @@ A pragmatic **microservice-ready platform** using:
 
 ## Recommended stack
 
-### Frontend
-- Next.js app router
-- TypeScript
-- Tailwind
-- shadcn/ui
-- TanStack Query
-- Zustand for local UI state
-- react-hook-form + zod
-- visx or dnd-kit based timeline interaction layer
+### Frontend (as implemented)
+- **Vite** + React (`client/`), **Axios**, React Router, Tailwind; screens under `client/src/pages/` (add react-hook-form + zod when you need schema-driven forms)
+- Shared **`@roadmap/types`** (Zod) for API shapes where wired; HTTP via **Axios** instance + `loadJson` / `sendJson` helpers
+- Timeline and grid views implemented in-app (see `00-implementation-status.md` for UI scope)
 
-### Backend
-- NestJS services in TypeScript
-- REST externally, events internally
-- Prisma ORM for fast delivery
-- BullMQ for background jobs
-- Redis
+### Backend (as implemented)
+- **Express** services: TypeScript (portfolio, template, AI, worker) + **CommonJS** gateway and integration-service; client is Vite React (JavaScript)
+- REST externally; internal routes use shared keys where needed (e.g. portfolio internal APIs)
+- Prisma ORM per service with **Postgres schema-per-service**
+- **BullMQ / Redis / worker:** reserved for future async jobs; workbook import is currently **synchronous** in portfolio-service
 - PostgreSQL
 
 ### Integrations
@@ -60,11 +54,10 @@ A pragmatic **microservice-ready platform** using:
 
 ### 2. Portfolio / Roadmaps
 - roadmap
-- roadmap views
+- roadmap views (grid, timeline, executive)
 - roadmap items
-- phase segments
-- milestones
-- dependencies
+- phase segments and **phase definitions** (workspace catalog)
+- milestones / dependencies (future emphasis in UI)
 
 ### 3. Initiatives & Themes
 - initiative
@@ -100,7 +93,7 @@ A pragmatic **microservice-ready platform** using:
 Do not start with 12 network hops for one timeline load.
 Start with these deployable services:
 - web
-- api-gateway
+- gateway (`services/gateway`)
 - portfolio-service
 - template-service
 - integration-service
@@ -111,15 +104,17 @@ That is enough separation to honor microservice principles while keeping operati
 
 ## Event-driven flows
 
-### Example: spreadsheet import
-1. user uploads workbook
-2. api-gateway stores file and creates import job
-3. worker parses workbook
-4. portfolio-service upserts themes, initiatives, roadmap items, phase segments
-5. import result is persisted
-6. UI shows batch summary and row issues
+### Example: spreadsheet import (current)
+1. user uploads workbook via gateway to portfolio-service
+2. portfolio-service saves the file (temp path in batch metadata) and runs import synchronously
+3. portfolio-service upserts themes, initiatives, roadmap items, phase segments
+4. import result is persisted on the batch
+5. UI shows batch summary and row issues  
+   (Optional later: enqueue on Redis + **worker** for very large files.)
 
-### Example: Jira sync
+### Example: Jira (current vs future)
+**Today:** integration-service stores Jira Cloud credentials and can **verify** the connection (`GET /rest/api/3/myself` via Jira Cloud REST API v3). **Future:** scheduled sync, entity mapping, and portfolio updates follow the steps below.
+
 1. scheduled sync job runs
 2. integration-service fetches Jira updates
 3. mapping rules translate Jira entities

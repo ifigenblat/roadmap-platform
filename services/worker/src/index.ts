@@ -11,7 +11,7 @@ if (existsSync(rootEnv)) config({ path: rootEnv });
 if (existsSync(pkgEnv)) config({ path: pkgEnv });
 
 const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const portfolioBase = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4100";
+const portfolioBase = process.env.PORTFOLIO_SERVICE_URL || "http://localhost:4110";
 const internalKey = process.env.INTERNAL_API_KEY || "";
 
 function redisConnectionFromUrl(urlStr: string) {
@@ -42,7 +42,7 @@ app.get("/", (_req, res) =>
     service: "worker",
     queue: "import-workbook",
     message:
-      "Consumes BullMQ jobs from portfolio uploads; calls portfolio /internal/imports/:id/worker-complete (extend to parse filePath).",
+      "Consumes BullMQ import-workbook jobs; calls portfolio POST /internal/imports/:id/process-workbook (upload UI uses sync import; queue is optional).",
   })
 );
 
@@ -78,7 +78,7 @@ worker.on("failed", (job, err) => {
   console.error("Job failed", job?.id, err);
 });
 
-const port = Number(process.env.PORT || 4500);
+const port = Number(process.env.PORT || 4510);
 app.listen(port, () =>
   console.log(`worker listening on ${port} (BullMQ on ${redisUrl})`)
 );

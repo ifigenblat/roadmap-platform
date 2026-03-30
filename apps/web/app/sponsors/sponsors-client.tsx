@@ -5,6 +5,7 @@ import { FormModal, ModalActions, modalFieldClass } from "../../components/form-
 import { PageToolbar } from "../../components/page-toolbar";
 import { sendJson } from "../../lib/api";
 import { ToastViewport, useToasts } from "../../lib/toast";
+import { WorkspaceSelectField } from "../../components/workspace-select-field";
 
 type SponsorRow = {
   id: string;
@@ -15,7 +16,15 @@ type SponsorRow = {
   notes?: string | null;
 };
 
-export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
+type WorkspaceOption = { id: string; name: string; slug: string };
+
+export function SponsorsClient({
+  initial,
+  workspaces,
+}: {
+  initial: SponsorRow[];
+  workspaces: WorkspaceOption[];
+}) {
   const [rows, setRows] = useState(initial);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,6 +32,7 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [draftNotesById, setDraftNotesById] = useState<Record<string, string>>({});
   const { toasts, push, dismiss } = useToasts();
 
   const filteredRows = useMemo(() => {
@@ -46,6 +56,7 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
       setRows((prev) => [created, ...prev]);
       setDisplayName("");
       setEmail("");
+      setWorkspaceId("");
       setCreateOpen(false);
       push("Business sponsor created.");
     } catch (err) {
@@ -81,6 +92,12 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
       setRows(prev);
       push(`Delete failed: ${String(err)}`, "error");
     }
+  }
+
+  function noteDraftFor(row: SponsorRow): string {
+    return Object.prototype.hasOwnProperty.call(draftNotesById, row.id)
+      ? draftNotesById[row.id]
+      : (row.notes ?? "");
   }
 
   return (
@@ -127,14 +144,14 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-400">Workspace ID (optional)</span>
-            <input
-              className={modalFieldClass}
-              value={workspaceId}
-              onChange={(e) => setWorkspaceId(e.target.value)}
-            />
-          </label>
+          <WorkspaceSelectField
+            label="Workspace (optional)"
+            value={workspaceId}
+            onChange={setWorkspaceId}
+            workspaces={workspaces}
+            optional
+            disabled={busy}
+          />
           <ModalActions>
             <button
               type="button"
@@ -171,16 +188,28 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
                 <td className="p-4">{s.displayName}</td>
                 <td>{s.email || "—"}</td>
                 <td className="py-3 pr-2">
-                  <PatchNotesCell value={s.notes || ""} onSave={(v) => onPatchNotes(s.id, v)} />
+                  <PatchNotesCell
+                    value={noteDraftFor(s)}
+                    onChange={(v) => setDraftNotesById((prev) => ({ ...prev, [s.id]: v }))}
+                  />
                 </td>
                 <td className="pr-4 py-3">
-                  <button
-                    type="button"
-                    className="rounded-md border border-rose-900/60 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
-                    onClick={() => onDelete(s.id)}
-                  >
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+                      onClick={() => onPatchNotes(s.id, noteDraftFor(s))}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-rose-900/60 px-2 py-1 text-xs text-rose-300 hover:bg-rose-950/40"
+                      onClick={() => onDelete(s.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -202,34 +231,19 @@ export function SponsorsClient({ initial }: { initial: SponsorRow[] }) {
 
 function PatchNotesCell({
   value,
-  onSave,
+  onChange,
 }: {
   value: string;
-  onSave: (next: string) => Promise<void>;
+  onChange: (next: string) => void;
 }) {
-  const [draft, setDraft] = useState(value);
-  const [busy, setBusy] = useState(false);
-
   return (
     <div className="flex flex-col gap-1 max-w-[220px]">
       <input
         className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder="Notes"
       />
-      <button
-        type="button"
-        disabled={busy}
-        className="self-start rounded-md border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800 disabled:opacity-60"
-        onClick={async () => {
-          setBusy(true);
-          await onSave(draft);
-          setBusy(false);
-        }}
-      >
-        Save
-      </button>
     </div>
   );
 }

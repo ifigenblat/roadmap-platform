@@ -14,6 +14,8 @@ type RoadmapDetails = {
   endDate: string;
 };
 
+type PhaseDefRow = { id: string; name: string };
+
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [roadmapRes, itemsRes] = await Promise.all([
@@ -21,10 +23,24 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     loadJson<TimelineItem[]>(`/api/roadmaps/${id}/items`),
   ]);
 
-  const warning = !roadmapRes.ok ? roadmapRes.message : !itemsRes.ok ? itemsRes.message : "";
+  const workspaceId = roadmapRes.ok ? roadmapRes.data.workspaceId : "";
+  const phasesRes = roadmapRes.ok
+    ? await loadJson<PhaseDefRow[]>(
+        `/api/phase-definitions?workspaceId=${encodeURIComponent(workspaceId)}`
+      )
+    : { ok: true as const, data: [] as PhaseDefRow[] };
+
+  const warning = !roadmapRes.ok
+    ? roadmapRes.message
+    : !itemsRes.ok
+      ? itemsRes.message
+      : !phasesRes.ok
+        ? phasesRes.message
+        : "";
 
   const roadmap = roadmapRes.ok ? roadmapRes.data : null;
   const items = itemsRes.ok ? itemsRes.data : [];
+  const workspacePhases = phasesRes.ok ? phasesRes.data : [];
 
   return (
     <AppLayout>
@@ -65,11 +81,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           roadmapStart={roadmap.startDate}
           roadmapEnd={roadmap.endDate}
           items={items}
+          workspacePhases={workspacePhases}
         />
       ) : roadmap && !itemsRes.ok ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
           Timeline needs roadmap items from the API. Fix the error above (usually start{" "}
-          <strong className="font-medium">api-gateway</strong> on port 4000 so{" "}
+          <strong className="font-medium">api-gateway</strong> on port 4010 so{" "}
           <code className="text-amber-100/90">/api/roadmaps/{id}/items</code> succeeds).
         </p>
       ) : null}

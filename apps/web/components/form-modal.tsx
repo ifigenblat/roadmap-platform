@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Same shell as timeline / inline editors: overlay + scrollable slate card. */
 export function FormModal({
@@ -11,6 +13,7 @@ export function FormModal({
   titleId = "form-modal-title",
   children,
   maxWidthClass = "max-w-2xl",
+  maxHeightClass = "max-h-[min(90vh,720px)]",
 }: {
   open: boolean;
   onClose: () => void;
@@ -19,9 +22,17 @@ export function FormModal({
   titleId?: string;
   children: ReactNode;
   maxWidthClass?: string;
+  /** Scrollable panel max height (viewport-based). */
+  maxHeightClass?: string;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   if (!open) return null;
-  return (
+
+  const shell = (
     <div
       className="fixed inset-0 z-[400] flex items-center justify-center bg-black/55 p-4"
       role="dialog"
@@ -30,7 +41,7 @@ export function FormModal({
       onClick={onClose}
     >
       <div
-        className={`max-h-[min(90vh,720px)] w-full ${maxWidthClass} overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 p-4 shadow-2xl`}
+        className={`${maxHeightClass} w-full ${maxWidthClass} overflow-y-auto rounded-xl border border-slate-600 bg-slate-900 p-5 shadow-2xl sm:p-6`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="text-lg font-semibold text-slate-100">
@@ -43,6 +54,9 @@ export function FormModal({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined" || !mounted) return null;
+  return createPortal(shell, document.body);
 }
 
 export const modalFieldClass =

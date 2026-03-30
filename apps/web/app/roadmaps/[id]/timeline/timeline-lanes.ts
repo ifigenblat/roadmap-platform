@@ -2,13 +2,15 @@ import { ymdToMs } from "./timeline-utils";
 
 export type SegmentForLane = { key: string; start: string; end: string };
 
-/** Greedy lane packing: overlapping segments get different vertical lanes (Gantt-style). */
-export function assignLanes(segments: SegmentForLane[]): Map<string, number> {
-  const sorted = [...segments].sort((a, b) => ymdToMs(a.start) - ymdToMs(b.start) || ymdToMs(a.end) - ymdToMs(b.end));
+/**
+ * Greedy lane packing in **caller order** (e.g. user sort). Overlapping segments
+ * stack vertically; non-overlapping segments can share a lane (original bar density).
+ */
+export function assignLanesInDisplayOrder(segments: SegmentForLane[]): Map<string, number> {
   const laneEnds: number[] = [];
   const out = new Map<string, number>();
 
-  for (const seg of sorted) {
+  for (const seg of segments) {
     const a = ymdToMs(seg.start);
     const b = ymdToMs(seg.end);
     let placed = false;

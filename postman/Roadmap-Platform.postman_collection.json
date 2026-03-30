@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Roadmap Platform",
-    "description": "Single collection: (A) public API via gateway `http://localhost:4000`, (B) direct service URLs for debugging and internal routes. URLs are literal (no `{{baseUrl}}`). Set collection variables for IDs; `internalApiKey` when INTERNAL_API_KEY is set.",
+    "description": "Roadmap Platform API (Vite SPA + Express gateway).\n\n**Primary path:** gateway `http://localhost:4010` — all `/api/*` and `GET /health`, `GET /api/openapi.yaml`.\n\n**Browser / same-origin path:** with `npm run dev` for `client/`, call `http://localhost:3001/api/*` (Vite proxies to the gateway). Override dev port with `VITE_DEV_PORT` in the environment.\n\n**Section B** hits services directly (`4110` portfolio, `4210` template, `4410` integration, `4310` ai, `4510` worker) for debugging and `x-internal-key` routes.\n\nURLs in requests are literal (no `{{baseUrl}}`). Set collection variables for IDs. Use `internalApiKey` when `INTERNAL_API_KEY` is set. If the gateway enforces JWT (`JWT_SECRET` + `JWT_ENFORCE_GATEWAY=1` in root `.env`), add `Authorization: Bearer <token>` to protected `/api/*` calls.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -69,7 +69,7 @@
   "item": [
     {
       "name": "A · API Gateway",
-      "description": "Normal client path: all `/api/*` routes on port 4000.",
+      "description": "Production-style path: gateway on port **4010**. The Vite app (`npm run dev` in `client/`) serves on **3001** by default and proxies `/api` → this gateway — use `http://localhost:3001/api/...` to mimic the browser.",
       "item": [
         {
           "name": "Meta",
@@ -79,7 +79,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/health"
+                "url": "http://localhost:4010/health"
               }
             },
             {
@@ -87,7 +87,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/openapi.yaml"
+                "url": "http://localhost:4010/api/openapi.yaml"
               }
             }
           ]
@@ -100,7 +100,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/workspaces"
+                "url": "http://localhost:4010/api/workspaces"
               }
             },
             {
@@ -108,7 +108,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps"
+                "url": "http://localhost:4010/api/roadmaps"
               }
             },
             {
@@ -124,9 +124,9 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"FY26 Product\",\n  \"slug\": \"fy26-product\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                  "raw": "{\n  \"name\": \"FY26 Roadmap Platform\",\n  \"slug\": \"fy26-roadmap-platform\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/roadmaps"
+                "url": "http://localhost:4010/api/roadmaps"
               }
             },
             {
@@ -134,7 +134,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}"
               }
             },
             {
@@ -152,7 +152,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"status\": \"active\"\n}"
                 },
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}"
               }
             },
             {
@@ -170,7 +170,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Clone\",\n  \"slug\": \"fy26-clone\"\n}"
                 },
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/clone"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/clone"
               }
             },
             {
@@ -178,7 +178,7 @@
               "request": {
                 "method": "POST",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/archive"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/archive"
               }
             },
             {
@@ -186,7 +186,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/items"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/items"
               }
             },
             {
@@ -204,7 +204,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"medium\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-06-30\",\n  \"sortOrder\": 0\n}"
                 },
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/items"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/items"
               }
             },
             {
@@ -212,7 +212,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/themes"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/themes"
               }
             },
             {
@@ -230,7 +230,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Growth\",\n  \"objective\": \"Expand revenue\",\n  \"colorToken\": \"blue\",\n  \"orderIndex\": 0\n}"
                 },
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/themes"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/themes"
               }
             },
             {
@@ -238,7 +238,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmaps/{{roadmapId}}/executive-summary"
+                "url": "http://localhost:4010/api/roadmaps/{{roadmapId}}/executive-summary"
               }
             },
             {
@@ -246,7 +246,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmap-items"
+                "url": "http://localhost:4010/api/roadmap-items"
               }
             },
             {
@@ -264,7 +264,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"low\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-03-31\",\n  \"sortOrder\": 1\n}"
                 },
-                "url": "http://localhost:4000/api/roadmap-items"
+                "url": "http://localhost:4010/api/roadmap-items"
               }
             },
             {
@@ -272,7 +272,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}"
+                "url": "http://localhost:4010/api/roadmap-items/{{itemId}}"
               }
             },
             {
@@ -290,7 +290,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"status\": \"in_progress\"\n}"
                 },
-                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}"
+                "url": "http://localhost:4010/api/roadmap-items/{{itemId}}"
               }
             },
             {
@@ -308,7 +308,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"sortOrder\": 10\n}"
                 },
-                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/move"
+                "url": "http://localhost:4010/api/roadmap-items/{{itemId}}/move"
               }
             },
             {
@@ -326,7 +326,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
                 },
-                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/phases"
+                "url": "http://localhost:4010/api/roadmap-items/{{itemId}}/phases"
               }
             },
             {
@@ -344,7 +344,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"teamIds\": [\"{{teamId}}\"]\n}"
                 },
-                "url": "http://localhost:4000/api/roadmap-items/{{itemId}}/teams"
+                "url": "http://localhost:4010/api/roadmap-items/{{itemId}}/teams"
               }
             },
             {
@@ -362,7 +362,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"status\": \"In Progress\",\n  \"capacityAllocationEstimate\": 0.25,\n  \"sprintEstimate\": 3,\n  \"jiraKey\": \"PROJ-123\",\n  \"notes\": \"Updated via Postman\"\n}"
                 },
-                "url": "http://localhost:4000/api/phase-segments/{{phaseSegmentId}}"
+                "url": "http://localhost:4010/api/phase-segments/{{phaseSegmentId}}"
               }
             }
           ]
@@ -375,7 +375,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/initiatives"
+                "url": "http://localhost:4010/api/initiatives"
               }
             },
             {
@@ -393,7 +393,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"canonicalName\": \"Self-serve onboarding\",\n  \"shortObjective\": \"Reduce time-to-value\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/initiatives"
+                "url": "http://localhost:4010/api/initiatives"
               }
             },
             {
@@ -401,7 +401,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}"
               }
             },
             {
@@ -419,7 +419,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"notes\": \"via gateway\",\n  \"businessSponsorId\": \"{{businessSponsorId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}"
               }
             },
             {
@@ -427,7 +427,7 @@
               "request": {
                 "method": "DELETE",
                 "header": [],
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}"
               }
             },
             {
@@ -445,7 +445,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"strategicThemeId\": \"{{themeId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/themes"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}/themes"
               }
             },
             {
@@ -463,7 +463,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"strategicThemeIds\": [\"{{themeId}}\"]\n}"
                 },
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/theme-links"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}/theme-links"
               }
             },
             {
@@ -471,7 +471,7 @@
               "request": {
                 "method": "DELETE",
                 "header": [],
-                "url": "http://localhost:4000/api/initiatives/{{initiativeId}}/themes/{{themeId}}"
+                "url": "http://localhost:4010/api/initiatives/{{initiativeId}}/themes/{{themeId}}"
               }
             },
             {
@@ -479,7 +479,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/themes"
+                "url": "http://localhost:4010/api/themes"
               }
             },
             {
@@ -497,7 +497,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Platform\",\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"orderIndex\": 0\n}"
                 },
-                "url": "http://localhost:4000/api/themes"
+                "url": "http://localhost:4010/api/themes"
               }
             },
             {
@@ -505,7 +505,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/themes/{{themeId}}"
+                "url": "http://localhost:4010/api/themes/{{themeId}}"
               }
             },
             {
@@ -523,7 +523,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"objective\": \"Reliability\"\n}"
                 },
-                "url": "http://localhost:4000/api/themes/{{themeId}}"
+                "url": "http://localhost:4010/api/themes/{{themeId}}"
               }
             },
             {
@@ -531,7 +531,7 @@
               "request": {
                 "method": "DELETE",
                 "header": [],
-                "url": "http://localhost:4000/api/themes/{{themeId}}"
+                "url": "http://localhost:4010/api/themes/{{themeId}}"
               }
             },
             {
@@ -539,7 +539,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/teams"
+                "url": "http://localhost:4010/api/teams"
               }
             },
             {
@@ -557,7 +557,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Platform squad\",\n  \"kind\": \"squad\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/teams"
+                "url": "http://localhost:4010/api/teams"
               }
             },
             {
@@ -565,7 +565,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/teams/{{teamId}}"
+                "url": "http://localhost:4010/api/teams/{{teamId}}"
               }
             },
             {
@@ -583,7 +583,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"active\": false\n}"
                 },
-                "url": "http://localhost:4000/api/teams/{{teamId}}"
+                "url": "http://localhost:4010/api/teams/{{teamId}}"
               }
             },
             {
@@ -591,7 +591,7 @@
               "request": {
                 "method": "DELETE",
                 "header": [],
-                "url": "http://localhost:4000/api/teams/{{teamId}}"
+                "url": "http://localhost:4010/api/teams/{{teamId}}"
               }
             },
             {
@@ -599,7 +599,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/business-sponsors"
+                "url": "http://localhost:4010/api/business-sponsors"
               }
             },
             {
@@ -617,7 +617,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"displayName\": \"Jane Exec\",\n  \"email\": \"jane@example.com\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/business-sponsors"
+                "url": "http://localhost:4010/api/business-sponsors"
               }
             },
             {
@@ -625,7 +625,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+                "url": "http://localhost:4010/api/business-sponsors/{{businessSponsorId}}"
               }
             },
             {
@@ -643,7 +643,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"title\": \"VP Product\"\n}"
                 },
-                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+                "url": "http://localhost:4010/api/business-sponsors/{{businessSponsorId}}"
               }
             },
             {
@@ -651,7 +651,7 @@
               "request": {
                 "method": "DELETE",
                 "header": [],
-                "url": "http://localhost:4000/api/business-sponsors/{{businessSponsorId}}"
+                "url": "http://localhost:4010/api/business-sponsors/{{businessSponsorId}}"
               }
             }
           ]
@@ -664,7 +664,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/templates?workspaceId={{workspaceId}}"
+                "url": "http://localhost:4010/api/templates?workspaceId={{workspaceId}}"
               }
             },
             {
@@ -682,7 +682,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Quarterly planning\",\n  \"description\": \"Starter\",\n  \"configJson\": {},\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/templates"
+                "url": "http://localhost:4010/api/templates"
               }
             },
             {
@@ -690,7 +690,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/templates/{{templateId}}"
+                "url": "http://localhost:4010/api/templates/{{templateId}}"
               }
             },
             {
@@ -708,7 +708,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"From template\",\n  \"slug\": \"from-template-1\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\"\n}"
                 },
-                "url": "http://localhost:4000/api/templates/{{templateId}}/create-roadmap"
+                "url": "http://localhost:4010/api/templates/{{templateId}}/create-roadmap"
               }
             }
           ]
@@ -721,7 +721,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/imports?limit=25"
+                "url": "http://localhost:4010/api/imports?limit=25"
               }
             },
             {
@@ -744,7 +744,7 @@
                     }
                   ]
                 },
-                "url": "http://localhost:4000/api/imports/workbook"
+                "url": "http://localhost:4010/api/imports/workbook"
               }
             },
             {
@@ -752,7 +752,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/imports/{{importBatchId}}"
+                "url": "http://localhost:4010/api/imports/{{importBatchId}}"
               }
             },
             {
@@ -760,7 +760,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/imports/{{importBatchId}}/errors"
+                "url": "http://localhost:4010/api/imports/{{importBatchId}}/errors"
               }
             }
           ]
@@ -773,7 +773,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/integrations?workspaceId={{workspaceId}}"
+                "url": "http://localhost:4010/api/integrations?workspaceId={{workspaceId}}"
               }
             },
             {
@@ -789,9 +789,9 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": { \"baseUrl\": \"https://example.atlassian.net\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                  "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": {\n    \"siteUrl\": \"https://your-domain.atlassian.net\",\n    \"email\": \"you@company.com\",\n    \"apiToken\": \"{{jiraApiToken}}\"\n  },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/integrations/jira/connect"
+                "url": "http://localhost:4010/api/integrations/jira/connect"
               }
             },
             {
@@ -809,7 +809,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"connectionName\": \"Confluence\",\n  \"config\": { \"spaceKey\": \"TEAM\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                 },
-                "url": "http://localhost:4000/api/integrations/confluence/connect"
+                "url": "http://localhost:4010/api/integrations/confluence/connect"
               }
             },
             {
@@ -827,7 +827,7 @@
                   "mode": "raw",
                   "raw": "{}"
                 },
-                "url": "http://localhost:4000/api/integrations/{{integrationId}}/sync"
+                "url": "http://localhost:4010/api/integrations/{{integrationId}}/sync"
               }
             },
             {
@@ -835,7 +835,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4000/api/external-links?workspaceId={{workspaceId}}"
+                "url": "http://localhost:4010/api/external-links?workspaceId={{workspaceId}}"
               }
             }
           ]
@@ -858,7 +858,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"initiativeName\": \"Unified analytics\",\n  \"context\": \"B2B SaaS\"\n}"
                 },
-                "url": "http://localhost:4000/api/ai/generate-initiative-objective"
+                "url": "http://localhost:4010/api/ai/generate-initiative-objective"
               }
             },
             {
@@ -876,7 +876,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"title\": \"2026 Roadmap\",\n  \"items\": [{ \"name\": \"Launch v2\", \"status\": \"in_progress\" }]\n}"
                 },
-                "url": "http://localhost:4000/api/ai/summarize-roadmap"
+                "url": "http://localhost:4010/api/ai/summarize-roadmap"
               }
             },
             {
@@ -894,7 +894,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"text\": \"Improve onboarding completion\",\n  \"candidateThemes\": [\"Growth\", \"Platform\"]\n}"
                 },
-                "url": "http://localhost:4000/api/ai/classify-theme"
+                "url": "http://localhost:4010/api/ai/classify-theme"
               }
             },
             {
@@ -912,7 +912,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"text\": \"We will improve the product.\",\n  \"criteria\": [\"measurable outcomes\"]\n}"
                 },
-                "url": "http://localhost:4000/api/ai/quality-check"
+                "url": "http://localhost:4010/api/ai/quality-check"
               }
             },
             {
@@ -930,7 +930,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"bundle\": {\n    \"roadmapName\": \"2026 Plan\",\n    \"planningYear\": 2026,\n    \"themes\": [\n      {\n        \"name\": \"Platform\",\n        \"pillarObjective\": \"Reliable foundations\",\n        \"orderIndex\": 0,\n        \"initiatives\": [\n          {\n            \"name\": \"API hardening\",\n            \"shortObjective\": \"Reduce incidents\",\n            \"detailedObjective\": null,\n            \"phaseHealth\": { \"totalPhases\": 3, \"byStatus\": { \"done\": 1, \"in_progress\": 2 } }\n          }\n        ]\n      }\n    ],\n    \"ungroupedInitiatives\": []\n  }\n}"
                 },
-                "url": "http://localhost:4000/api/ai/executive-summary"
+                "url": "http://localhost:4010/api/ai/executive-summary"
               }
             }
           ]
@@ -942,7 +942,7 @@
       "description": "Bypass gateway or call internal HTTP (worker, imports). Same IDs as section A.",
       "item": [
         {
-          "name": "portfolio :4100",
+          "name": "portfolio :4110",
           "item": [
             {
               "name": "Health",
@@ -952,7 +952,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/health"
+                    "url": "http://localhost:4110/health"
                   }
                 }
               ]
@@ -971,7 +971,7 @@
                         "type": "text"
                       }
                     ],
-                    "url": "http://localhost:4100/internal/default-workspace-id"
+                    "url": "http://localhost:4110/internal/default-workspace-id"
                   }
                 },
                 {
@@ -994,7 +994,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"message\": \"Stub completion from Postman\"\n}"
                     },
-                    "url": "http://localhost:4100/internal/imports/{{importBatchId}}/worker-complete"
+                    "url": "http://localhost:4110/internal/imports/{{importBatchId}}/worker-complete"
                   }
                 }
               ]
@@ -1007,7 +1007,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/workspaces"
+                    "url": "http://localhost:4110/workspaces"
                   }
                 },
                 {
@@ -1015,7 +1015,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps"
+                    "url": "http://localhost:4110/roadmaps"
                   }
                 },
                 {
@@ -1031,9 +1031,9 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"name\": \"FY26 Product\",\n  \"slug\": \"fy26-product\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                      "raw": "{\n  \"name\": \"FY26 Roadmap Platform\",\n  \"slug\": \"fy26-roadmap-platform\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/roadmaps"
+                    "url": "http://localhost:4110/roadmaps"
                   }
                 },
                 {
@@ -1041,7 +1041,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}"
                   }
                 },
                 {
@@ -1059,7 +1059,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"status\": \"active\"\n}"
                     },
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}"
                   }
                 },
                 {
@@ -1075,9 +1075,9 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"name\": \"FY26 Copy\",\n  \"slug\": \"fy26-product-copy\"\n}"
+                      "raw": "{\n  \"name\": \"FY26 Copy\",\n  \"slug\": \"fy26-roadmap-platform-copy\"\n}"
                     },
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/clone"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/clone"
                   }
                 },
                 {
@@ -1085,7 +1085,7 @@
                   "request": {
                     "method": "POST",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/archive"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/archive"
                   }
                 },
                 {
@@ -1093,7 +1093,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/items"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/items"
                   }
                 },
                 {
@@ -1111,7 +1111,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"medium\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-06-30\",\n  \"sortOrder\": 0\n}"
                     },
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/items"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/items"
                   }
                 },
                 {
@@ -1119,7 +1119,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/themes"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/themes"
                   }
                 },
                 {
@@ -1137,7 +1137,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"name\": \"Growth\",\n  \"objective\": \"Expand revenue\",\n  \"colorToken\": \"blue\",\n  \"orderIndex\": 0\n}"
                     },
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/themes"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/themes"
                   }
                 },
                 {
@@ -1145,7 +1145,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmaps/{{roadmapId}}/executive-summary"
+                    "url": "http://localhost:4110/roadmaps/{{roadmapId}}/executive-summary"
                   }
                 }
               ]
@@ -1158,7 +1158,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmap-items"
+                    "url": "http://localhost:4110/roadmap-items"
                   }
                 },
                 {
@@ -1176,7 +1176,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"initiativeId\": \"{{initiativeId}}\",\n  \"status\": \"not_started\",\n  \"priority\": \"low\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-03-31\",\n  \"sortOrder\": 1\n}"
                     },
-                    "url": "http://localhost:4100/roadmap-items"
+                    "url": "http://localhost:4110/roadmap-items"
                   }
                 },
                 {
@@ -1184,7 +1184,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/roadmap-items/{{itemId}}"
+                    "url": "http://localhost:4110/roadmap-items/{{itemId}}"
                   }
                 },
                 {
@@ -1202,7 +1202,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"status\": \"in_progress\"\n}"
                     },
-                    "url": "http://localhost:4100/roadmap-items/{{itemId}}"
+                    "url": "http://localhost:4110/roadmap-items/{{itemId}}"
                   }
                 },
                 {
@@ -1220,7 +1220,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"sortOrder\": 10\n}"
                     },
-                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/move"
+                    "url": "http://localhost:4110/roadmap-items/{{itemId}}/move"
                   }
                 },
                 {
@@ -1238,7 +1238,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-02-01\"\n}"
                     },
-                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/phases"
+                    "url": "http://localhost:4110/roadmap-items/{{itemId}}/phases"
                   }
                 },
                 {
@@ -1256,7 +1256,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"teamIds\": [\"{{teamId}}\"]\n}"
                     },
-                    "url": "http://localhost:4100/roadmap-items/{{itemId}}/teams"
+                    "url": "http://localhost:4110/roadmap-items/{{itemId}}/teams"
                   }
                 },
                 {
@@ -1274,7 +1274,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"phaseName\": \"Discovery\",\n  \"status\": \"In Progress\",\n  \"capacityAllocationEstimate\": 0.25,\n  \"sprintEstimate\": 3,\n  \"jiraKey\": \"PROJ-123\",\n  \"notes\": \"Updated via Postman\"\n}"
                     },
-                    "url": "http://localhost:4100/phase-segments/{{phaseSegmentId}}"
+                    "url": "http://localhost:4110/phase-segments/{{phaseSegmentId}}"
                   }
                 }
               ]
@@ -1287,7 +1287,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/initiatives"
+                    "url": "http://localhost:4110/initiatives"
                   }
                 },
                 {
@@ -1305,7 +1305,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"canonicalName\": \"Self-serve onboarding\",\n  \"shortObjective\": \"Reduce time-to-value\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/initiatives"
+                    "url": "http://localhost:4110/initiatives"
                   }
                 },
                 {
@@ -1313,7 +1313,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}"
                   }
                 },
                 {
@@ -1331,7 +1331,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"notes\": \"Updated via Postman\",\n  \"businessSponsorId\": \"{{businessSponsorId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}"
                   }
                 },
                 {
@@ -1339,7 +1339,7 @@
                   "request": {
                     "method": "DELETE",
                     "header": [],
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}"
                   }
                 },
                 {
@@ -1357,7 +1357,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"strategicThemeId\": \"{{themeId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/themes"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}/themes"
                   }
                 },
                 {
@@ -1375,7 +1375,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"strategicThemeIds\": [\"{{themeId}}\"]\n}"
                     },
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/theme-links"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}/theme-links"
                   }
                 },
                 {
@@ -1383,7 +1383,7 @@
                   "request": {
                     "method": "DELETE",
                     "header": [],
-                    "url": "http://localhost:4100/initiatives/{{initiativeId}}/themes/{{themeId}}"
+                    "url": "http://localhost:4110/initiatives/{{initiativeId}}/themes/{{themeId}}"
                   }
                 }
               ]
@@ -1396,7 +1396,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/themes"
+                    "url": "http://localhost:4110/themes"
                   }
                 },
                 {
@@ -1414,7 +1414,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"name\": \"Platform\",\n  \"roadmapId\": \"{{roadmapId}}\",\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"orderIndex\": 0\n}"
                     },
-                    "url": "http://localhost:4100/themes"
+                    "url": "http://localhost:4110/themes"
                   }
                 },
                 {
@@ -1422,7 +1422,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/themes/{{themeId}}"
+                    "url": "http://localhost:4110/themes/{{themeId}}"
                   }
                 },
                 {
@@ -1440,7 +1440,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"objective\": \"Reliability and scale\"\n}"
                     },
-                    "url": "http://localhost:4100/themes/{{themeId}}"
+                    "url": "http://localhost:4110/themes/{{themeId}}"
                   }
                 },
                 {
@@ -1448,7 +1448,7 @@
                   "request": {
                     "method": "DELETE",
                     "header": [],
-                    "url": "http://localhost:4100/themes/{{themeId}}"
+                    "url": "http://localhost:4110/themes/{{themeId}}"
                   }
                 }
               ]
@@ -1461,7 +1461,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/teams"
+                    "url": "http://localhost:4110/teams"
                   }
                 },
                 {
@@ -1479,7 +1479,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"name\": \"Platform squad\",\n  \"kind\": \"squad\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/teams"
+                    "url": "http://localhost:4110/teams"
                   }
                 },
                 {
@@ -1487,7 +1487,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/teams/{{teamId}}"
+                    "url": "http://localhost:4110/teams/{{teamId}}"
                   }
                 },
                 {
@@ -1505,7 +1505,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"active\": false\n}"
                     },
-                    "url": "http://localhost:4100/teams/{{teamId}}"
+                    "url": "http://localhost:4110/teams/{{teamId}}"
                   }
                 },
                 {
@@ -1513,7 +1513,7 @@
                   "request": {
                     "method": "DELETE",
                     "header": [],
-                    "url": "http://localhost:4100/teams/{{teamId}}"
+                    "url": "http://localhost:4110/teams/{{teamId}}"
                   }
                 }
               ]
@@ -1526,7 +1526,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/business-sponsors"
+                    "url": "http://localhost:4110/business-sponsors"
                   }
                 },
                 {
@@ -1544,7 +1544,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"displayName\": \"Jane Exec\",\n  \"email\": \"jane@example.com\",\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4100/business-sponsors"
+                    "url": "http://localhost:4110/business-sponsors"
                   }
                 },
                 {
@@ -1552,7 +1552,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                    "url": "http://localhost:4110/business-sponsors/{{businessSponsorId}}"
                   }
                 },
                 {
@@ -1570,7 +1570,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"title\": \"VP Product\"\n}"
                     },
-                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                    "url": "http://localhost:4110/business-sponsors/{{businessSponsorId}}"
                   }
                 },
                 {
@@ -1578,7 +1578,7 @@
                   "request": {
                     "method": "DELETE",
                     "header": [],
-                    "url": "http://localhost:4100/business-sponsors/{{businessSponsorId}}"
+                    "url": "http://localhost:4110/business-sponsors/{{businessSponsorId}}"
                   }
                 }
               ]
@@ -1591,7 +1591,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/imports?limit=25"
+                    "url": "http://localhost:4110/imports?limit=25"
                   }
                 },
                 {
@@ -1614,7 +1614,7 @@
                         }
                       ]
                     },
-                    "url": "http://localhost:4100/imports/workbook"
+                    "url": "http://localhost:4110/imports/workbook"
                   }
                 },
                 {
@@ -1622,7 +1622,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/imports/{{importBatchId}}"
+                    "url": "http://localhost:4110/imports/{{importBatchId}}"
                   }
                 },
                 {
@@ -1630,7 +1630,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4100/imports/{{importBatchId}}/errors"
+                    "url": "http://localhost:4110/imports/{{importBatchId}}/errors"
                   }
                 }
               ]
@@ -1638,7 +1638,7 @@
           ]
         },
         {
-          "name": "template :4200",
+          "name": "template :4210",
           "item": [
             {
               "name": "Health",
@@ -1648,7 +1648,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4200/health"
+                    "url": "http://localhost:4210/health"
                   }
                 }
               ]
@@ -1661,7 +1661,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4200/templates?workspaceId={{workspaceId}}"
+                    "url": "http://localhost:4210/templates?workspaceId={{workspaceId}}"
                   }
                 },
                 {
@@ -1679,7 +1679,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"name\": \"Quarterly planning\",\n  \"description\": \"Starter structure\",\n  \"configJson\": {},\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4200/templates"
+                    "url": "http://localhost:4210/templates"
                   }
                 },
                 {
@@ -1687,7 +1687,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4200/templates/{{templateId}}"
+                    "url": "http://localhost:4210/templates/{{templateId}}"
                   }
                 },
                 {
@@ -1705,7 +1705,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"name\": \"From template\",\n  \"slug\": \"from-template-1\",\n  \"planningYear\": 2026,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\",\n  \"status\": \"draft\"\n}"
                     },
-                    "url": "http://localhost:4200/templates/{{templateId}}/create-roadmap"
+                    "url": "http://localhost:4210/templates/{{templateId}}/create-roadmap"
                   }
                 }
               ]
@@ -1724,7 +1724,7 @@
                         "type": "text"
                       }
                     ],
-                    "url": "http://localhost:4200/internal/workspaces/{{workspaceId}}/templates"
+                    "url": "http://localhost:4210/internal/workspaces/{{workspaceId}}/templates"
                   }
                 }
               ]
@@ -1742,7 +1742,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4400/"
+                    "url": "http://localhost:4410/"
                   }
                 },
                 {
@@ -1750,7 +1750,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4400/health"
+                    "url": "http://localhost:4410/health"
                   }
                 }
               ]
@@ -1763,7 +1763,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4400/integrations?workspaceId={{workspaceId}}"
+                    "url": "http://localhost:4410/integrations?workspaceId={{workspaceId}}"
                   }
                 },
                 {
@@ -1779,9 +1779,9 @@
                     ],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": { \"baseUrl\": \"https://example.atlassian.net\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                      "raw": "{\n  \"connectionName\": \"Jira prod\",\n  \"config\": {\n    \"siteUrl\": \"https://your-domain.atlassian.net\",\n    \"email\": \"you@company.com\",\n    \"apiToken\": \"{{jiraApiToken}}\"\n  },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4400/integrations/jira/connect"
+                    "url": "http://localhost:4410/integrations/jira/connect"
                   }
                 },
                 {
@@ -1799,7 +1799,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"connectionName\": \"Confluence\",\n  \"config\": { \"spaceKey\": \"TEAM\" },\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
                     },
-                    "url": "http://localhost:4400/integrations/confluence/connect"
+                    "url": "http://localhost:4410/integrations/confluence/connect"
                   }
                 },
                 {
@@ -1817,7 +1817,7 @@
                       "mode": "raw",
                       "raw": "{}"
                     },
-                    "url": "http://localhost:4400/integrations/{{integrationId}}/sync"
+                    "url": "http://localhost:4410/integrations/{{integrationId}}/sync"
                   }
                 }
               ]
@@ -1830,7 +1830,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4400/external-links?workspaceId={{workspaceId}}"
+                    "url": "http://localhost:4410/external-links?workspaceId={{workspaceId}}"
                   }
                 }
               ]
@@ -1858,7 +1858,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"entityType\": \"roadmap_item\",\n  \"entityId\": \"item-uuid\",\n  \"provider\": \"jira\",\n  \"externalId\": \"PROJ-1\",\n  \"externalUrl\": \"https://jira.example/browse/PROJ-1\",\n  \"syncState\": \"linked\"\n}"
                     },
-                    "url": "http://localhost:4400/internal/external-links"
+                    "url": "http://localhost:4410/internal/external-links"
                   }
                 },
                 {
@@ -1872,7 +1872,7 @@
                         "type": "text"
                       }
                     ],
-                    "url": "http://localhost:4400/internal/workspaces/{{workspaceId}}/external-links"
+                    "url": "http://localhost:4410/internal/workspaces/{{workspaceId}}/external-links"
                   }
                 }
               ]
@@ -1890,7 +1890,7 @@
                   "request": {
                     "method": "GET",
                     "header": [],
-                    "url": "http://localhost:4300/health"
+                    "url": "http://localhost:4310/health"
                   }
                 }
               ]
@@ -1913,7 +1913,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"initiativeName\": \"Unified analytics\",\n  \"context\": \"B2B SaaS, Q2 focus\"\n}"
                     },
-                    "url": "http://localhost:4300/ai/generate-initiative-objective"
+                    "url": "http://localhost:4310/ai/generate-initiative-objective"
                   }
                 },
                 {
@@ -1931,7 +1931,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"title\": \"2026 Roadmap\",\n  \"items\": [\n    { \"name\": \"Launch v2\", \"status\": \"in_progress\", \"notes\": \"API freeze April\" }\n  ]\n}"
                     },
-                    "url": "http://localhost:4300/ai/summarize-roadmap"
+                    "url": "http://localhost:4310/ai/summarize-roadmap"
                   }
                 },
                 {
@@ -1949,7 +1949,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"text\": \"Improve onboarding completion and reduce support tickets\",\n  \"candidateThemes\": [\"Growth\", \"Platform\", \"Customer experience\"]\n}"
                     },
-                    "url": "http://localhost:4300/ai/classify-theme"
+                    "url": "http://localhost:4310/ai/classify-theme"
                   }
                 },
                 {
@@ -1967,7 +1967,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"text\": \"We will improve the product this year.\",\n  \"criteria\": [\"measurable outcomes\", \"customer value\"]\n}"
                     },
-                    "url": "http://localhost:4300/ai/quality-check"
+                    "url": "http://localhost:4310/ai/quality-check"
                   }
                 },
                 {
@@ -1985,7 +1985,7 @@
                       "mode": "raw",
                       "raw": "{\n  \"bundle\": {\n    \"roadmapName\": \"2026 Plan\",\n    \"planningYear\": 2026,\n    \"themes\": [\n      {\n        \"name\": \"Platform\",\n        \"pillarObjective\": \"Reliable foundations\",\n        \"orderIndex\": 0,\n        \"initiatives\": [\n          {\n            \"name\": \"API hardening\",\n            \"shortObjective\": \"Reduce incidents\",\n            \"detailedObjective\": null,\n            \"phaseHealth\": { \"totalPhases\": 3, \"byStatus\": { \"done\": 1, \"in_progress\": 2 } }\n          }\n        ]\n      }\n    ],\n    \"ungroupedInitiatives\": []\n  }\n}"
                     },
-                    "url": "http://localhost:4300/ai/executive-summary"
+                    "url": "http://localhost:4310/ai/executive-summary"
                   }
                 }
               ]
@@ -2000,7 +2000,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4500/health"
+                "url": "http://localhost:4510/health"
               }
             },
             {
@@ -2008,7 +2008,7 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "http://localhost:4500/"
+                "url": "http://localhost:4510/"
               }
             }
           ]

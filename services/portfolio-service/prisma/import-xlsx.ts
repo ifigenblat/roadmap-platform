@@ -17,6 +17,8 @@ import * as path from "node:path";
 const require = createRequire(import.meta.url);
 // xlsx is CJS; namespace import breaks under tsx/esbuild
 const XLSX = require("xlsx") as typeof import("xlsx");
+type XlsxWorkBook = import("xlsx").WorkBook;
+type XlsxWorkSheet = import("xlsx").WorkSheet;
 import {
   ItemStatus,
   PrismaClient,
@@ -27,19 +29,40 @@ import {
   integrationDeleteExternalLinksForWorkspace,
   integrationHasExternalLink,
 } from "../src/integrationClient.js";
+import { ensurePhaseDefinitionByName } from "../src/phase-definition-helpers.js";
 import { deleteTemplatesForWorkspace } from "../src/templateClient.js";
+import {
+  buildInitiativeDescriptionIndex,
+  INITIATIVE_DESCRIPTION_ALIASES_CET,
+  InitiativeDescriptionEntry,
+  keyedRowsFromAoA,
+  normalizeHeaderKey,
+  pickBusinessSponsorFromRow,
+  resolveInitiativeDescription,
+} from "../src/xlsxColumnPickers.js";
 
 const prisma = new PrismaClient();
 
 const WORKSPACE_SLUG = "excel-import";
 const ROADMAP_SLUGS = {
-  dcx: "2026-product-roadmap-dcx",
-  cet: "2026-product-roadmap-cet-sales-marketing",
+  dcx: "2026-roadmap-platform-dcx",
+  cet: "2026-roadmap-platform-cet-sales-marketing",
 } as const;
 
 function repoDataDir(): string {
   const root = path.resolve(process.cwd(), "../..");
   return path.join(root, "spec:/Data");
+}
+
+/** First matching filename wins (Roadmap Platform naming preferred; legacy workbook titles still work). */
+function resolveDataFile(dataDir: string, candidates: string[]): string {
+  for (const name of candidates) {
+    const p = path.join(dataDir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  const msg = `Missing file in ${dataDir}; tried: ${candidates.join(", ")}`;
+  console.error(msg);
+  throw new Error(msg);
 }
 
 function slugify(s: string): string {
@@ -95,18 +118,53 @@ function parseSprintEstimate(val: unknown): number | null {
 type RowObj = Record<string, unknown>;
 
 function sheetRows(ws: XLSX.WorkSheet): RowObj[] {
-  return XLSX.utils.sheet_to_json<RowObj>(ws, { defval: "", raw: false });
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: "",
+    raw: false,
+  }) as unknown[][];
+  return keyedRowsFromAoA(aoa).rows;
+}
+
+function sheetRowsWithHeader(ws: XLSX.WorkSheet): {
+  rows: RowObj[];
+  headerRow0Based: number;
+} {
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: "",
+    raw: false,
+  }) as unknown[][];
+  const k = keyedRowsFromAoA(aoa);
+  return { rows: k.rows, headerRow0Based: k.headerRow0Based };
+}
+
+function sheetByNameCI(wb: XlsxWorkBook, name: string): XlsxWorkSheet | undefined {
+  const want = normalizeHeaderKey(name);
+  const key = Object.keys(wb.Sheets).find((n) => normalizeHeaderKey(n) === want);
+  return key ? wb.Sheets[key] : undefined;
 }
 
 function get(row: RowObj, ...keys: string[]): string {
-  for (const k of keys) {
-    for (const rk of Object.keys(row)) {
-      if (rk.trim().toLowerCase() === k.trim().toLowerCase()) {
-        return str(row[rk]);
-      }
+  for (const key of keys) {
+    const want = normalizeHeaderKey(key);
+    const match = Object.keys(row).find((rk) => normalizeHeaderKey(rk) === want);
+    if (match) {
+      const v = str(row[match]);
+      if (v !== "") return v;
     }
   }
   return "";
+}
+
+/** Bracket-style access with normalized header names (handles casing / spacing). */
+function rowVal(row: RowObj, ...aliases: string[]): unknown {
+  for (const a of aliases) {
+    const want = normalizeHeaderKey(a);
+    const k = Object.keys(row).find((rk) => normalizeHeaderKey(rk) === want);
+    if (k !== undefined) return row[k];
+  }
+  return undefined;
 }
 
 async function ensureWorkspace() {
@@ -138,7 +196,13 @@ async function wipeImportWorkspace(workspaceId: string) {
   });
   const roadmapIds = roadmaps.map((r) => r.id);
 
+  let candidateTeamIds: string[] = [];
   if (roadmapIds.length > 0) {
+    const links = await prisma.roadmapItemTeam.findMany({
+      where: { roadmapItem: { roadmapId: { in: roadmapIds } } },
+      select: { teamId: true },
+    });
+    candidateTeamIds = [...new Set(links.map((l) => l.teamId))];
     await prisma.phaseSegment.deleteMany({
       where: { roadmapItem: { roadmapId: { in: roadmapIds } } },
     });
@@ -156,7 +220,21 @@ async function wipeImportWorkspace(workspaceId: string) {
   });
   await prisma.initiative.deleteMany({ where: { workspaceId } });
   await prisma.strategicTheme.deleteMany({ where: { workspaceId } });
-  await prisma.team.deleteMany({ where: { workspaceId } });
+
+  if (candidateTeamIds.length > 0) {
+    const imported = await prisma.team.findMany({
+      where: { id: { in: candidateTeamIds }, kind: "imported" },
+      select: { id: true },
+    });
+    const orphanIds: string[] = [];
+    for (const t of imported) {
+      const remaining = await prisma.roadmapItemTeam.count({ where: { teamId: t.id } });
+      if (remaining === 0) orphanIds.push(t.id);
+    }
+    if (orphanIds.length > 0) {
+      await prisma.team.deleteMany({ where: { id: { in: orphanIds } } });
+    }
+  }
 }
 
 function rowPayloadJson(row: RowObj): Record<string, string> {
@@ -200,6 +278,22 @@ async function upsertTheme(
   });
 }
 
+async function ensureBusinessSponsor(workspaceId: string, displayName: string): Promise<string> {
+  const name = displayName.trim();
+  if (!name) throw new Error("ensureBusinessSponsor: empty displayName");
+  const candidates = await prisma.businessSponsor.findMany({
+    where: { workspaceId },
+    select: { id: true, displayName: true },
+  });
+  const lower = name.toLowerCase();
+  const hit = candidates.find((c) => c.displayName.trim().toLowerCase() === lower);
+  if (hit) return hit.id;
+  const row = await prisma.businessSponsor.create({
+    data: { workspaceId, displayName: name },
+  });
+  return row.id;
+}
+
 async function upsertInitiative(
   workspaceId: string,
   canonicalName: string,
@@ -207,6 +301,7 @@ async function upsertInitiative(
     shortObjective?: string | null;
     detailedObjective?: string | null;
     businessSponsor?: string | null;
+    businessSponsorId?: string | null;
     type?: string | null;
     notes?: string | null;
     sourceSystem?: string | null;
@@ -224,7 +319,10 @@ async function upsertInitiative(
       data: {
         shortObjective: extra.shortObjective ?? found.shortObjective,
         detailedObjective: extra.detailedObjective ?? found.detailedObjective,
-        businessSponsor: extra.businessSponsor ?? found.businessSponsor,
+        businessSponsor:
+          extra.businessSponsor !== undefined ? extra.businessSponsor : found.businessSponsor,
+        businessSponsorId:
+          extra.businessSponsorId !== undefined ? extra.businessSponsorId : found.businessSponsorId,
         type: extra.type ?? found.type,
         notes: extra.notes ?? found.notes,
         sourceSystem: extra.sourceSystem ?? found.sourceSystem,
@@ -239,6 +337,7 @@ async function upsertInitiative(
       shortObjective: extra.shortObjective ?? null,
       detailedObjective: extra.detailedObjective ?? null,
       businessSponsor: extra.businessSponsor ?? null,
+      businessSponsorId: extra.businessSponsorId ?? null,
       type: extra.type ?? null,
       notes: extra.notes ?? null,
       sourceSystem: extra.sourceSystem ?? null,
@@ -260,10 +359,7 @@ async function linkInitiativeTheme(initiativeId: string, themeId: string) {
   }
 }
 
-async function ensureTeams(
-  workspaceId: string,
-  teamCsv: string
-): Promise<string[]> {
+async function ensureTeams(teamCsv: string): Promise<string[]> {
   const teamIds: string[] = [];
   const parts = teamCsv
     .split(/[,;]/)
@@ -271,11 +367,11 @@ async function ensureTeams(
     .filter(Boolean);
   for (const name of parts) {
     let team = await prisma.team.findFirst({
-      where: { workspaceId, name },
+      where: { name },
     });
     if (!team) {
       team = await prisma.team.create({
-        data: { workspaceId, name, kind: "imported" },
+        data: { name, kind: "imported" },
       });
     }
     teamIds.push(team.id);
@@ -289,16 +385,16 @@ async function importDcx(
   themeOrder: { counter: number }
 ) {
   const wb = XLSX.readFile(filePath);
-  const ws = wb.Sheets["Data"];
+  const ws = sheetByNameCI(wb, "Data");
   if (!ws) throw new Error("DCX: missing 'Data' sheet");
 
-  const rows = sheetRows(ws);
+  const { rows, headerRow0Based } = sheetRowsWithHeader(ws);
   const roadmap = await prisma.roadmap.create({
     data: {
       workspaceId,
-      name: "2026 Product Roadmap — DCX",
+      name: "2026 Roadmap Platform — DCX",
       slug: ROADMAP_SLUGS.dcx,
-      description: "Imported from 2026 Product Roadmap - DCX.xlsx",
+      description: "Imported from 2026 Roadmap Platform - DCX.xlsx",
       planningYear: 2026,
       startDate: new Date("2026-01-01"),
       endDate: new Date("2026-12-31"),
@@ -321,8 +417,16 @@ async function importDcx(
   let skipped = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNumber = i + 2;
-    const initName = get(row, "Initiative Name");
+    const rowNumber = headerRow0Based + i + 2;
+    const initName = get(
+      row,
+      "Initiative Name",
+      "Initiative/Project",
+      "Initiative / Project",
+      "Initiative",
+      "Project",
+      "Project Name"
+    );
     if (!initName) {
       skipped++;
       await prisma.importRowResult.create({
@@ -342,10 +446,17 @@ async function importDcx(
 
     const phase = get(row, "Phase");
     const themeName = get(row, "Theme", "Theme ");
-    const sponsor = get(row, "Business Sponsor");
+    const sponsor = pickBusinessSponsorFromRow(row);
     const teamsRaw = get(row, "Team(s)", "Teams");
-    const start = coerceDate(row["Start Quarter 2026"] ?? row["Start Date"]);
-    const end = coerceDate(row["End Quarter 2026"] ?? row["End Date"]);
+    const start = coerceDate(rowVal(row, "Start Quarter 2026", "Start Date"));
+    const end = coerceDate(rowVal(row, "End Quarter 2026", "End Date"));
+
+    const sponsorExtra = sponsor
+      ? {
+          businessSponsor: sponsor,
+          businessSponsorId: await ensureBusinessSponsor(workspaceId, sponsor),
+        }
+      : {};
 
     const theme =
       themeName &&
@@ -358,7 +469,7 @@ async function importDcx(
       ));
 
     const initiative = await upsertInitiative(workspaceId, initName, {
-      businessSponsor: sponsor || null,
+      ...sponsorExtra,
       type: phase || null,
     });
     if (theme) await linkInitiativeTheme(initiative.id, theme.id);
@@ -387,7 +498,7 @@ async function importDcx(
       });
     }
 
-    const teamIds = await ensureTeams(workspaceId, teamsRaw);
+    const teamIds = await ensureTeams(teamsRaw);
     for (const teamId of teamIds) {
       await prisma.roadmapItemTeam.create({
         data: { roadmapItemId: item.id, teamId },
@@ -427,30 +538,39 @@ async function importCet(
 ) {
   const wb = XLSX.readFile(filePath);
 
-  const descByInit = new Map<string, { short?: string; long?: string }>();
-  const descWs = wb.Sheets["Initiative Descriptions"];
+  const descEntries: InitiativeDescriptionEntry[] = [];
+  const descWs = sheetByNameCI(wb, "Initiative Descriptions");
   if (descWs) {
     for (const row of sheetRows(descWs)) {
       const init = get(row, "Initiative");
       if (!init) continue;
-      descByInit.set(init, {
+      descEntries.push({
+        name: init,
         short: get(row, "Succinct Business Objective (For Tracking Sheets)") || undefined,
-        long:
-          get(row, "Detailed Business Objective (For Slides)") || undefined,
+        long: get(row, "Detailed Business Objective (For Slides)") || undefined,
+        pillar: get(row, "Strategic Pillar") || undefined,
       });
     }
   }
+  const descIndex = buildInitiativeDescriptionIndex(descEntries);
 
-  const themesWs = wb.Sheets["Strategic Themes"];
+  const cetThemeObjectives = new Map<string, string>();
+  const themesWs = sheetByNameCI(wb, "Strategic Themes");
   if (themesWs) {
     for (const row of sheetRows(themesWs)) {
       const pillar = get(row, "Strategic Pillar");
       const obj = get(row, "Pillar Objective");
+      const included = get(row, "Initiatives Included");
       if (pillar) {
+        const parts: string[] = [];
+        if (obj) parts.push(obj);
+        if (included) parts.push(`Initiatives included: ${included}`);
+        const combined = parts.length ? parts.join("\n\n") : "";
+        if (combined) cetThemeObjectives.set(pillar, combined);
         await upsertTheme(
           workspaceId,
           pillar,
-          obj || undefined,
+          combined || undefined,
           themeOrder.counter++,
           null
         );
@@ -458,17 +578,17 @@ async function importCet(
     }
   }
 
-  const dataWs = wb.Sheets["Data"];
+  const dataWs = sheetByNameCI(wb, "Data");
   if (!dataWs) throw new Error("CET: missing 'Data' sheet");
-  const rows = sheetRows(dataWs);
+  const { rows, headerRow0Based } = sheetRowsWithHeader(dataWs);
 
   const roadmap = await prisma.roadmap.create({
     data: {
       workspaceId,
-      name: "2026 Product Roadmap — CET Sales & Marketing (DRAFT)",
+      name: "2026 Roadmap Platform — CET Sales & Marketing (DRAFT)",
       slug: ROADMAP_SLUGS.cet,
       description:
-        "Imported from 2026 Product Roadmap (DRAFT) - CET Sales and Marketing.xlsx",
+        "Imported from 2026 Roadmap Platform (DRAFT) - CET Sales and Marketing.xlsx",
       planningYear: 2026,
       startDate: new Date("2026-01-01"),
       endDate: new Date("2026-12-31"),
@@ -491,8 +611,16 @@ async function importCet(
   let skipped = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNumber = i + 2;
-    const initName = get(row, "Initiative/Project", "Initiative/Project");
+    const rowNumber = headerRow0Based + i + 2;
+    const initName = get(
+      row,
+      "Initiative/Project",
+      "Initiative / Project",
+      "Initiative Name",
+      "Initiative",
+      "Project",
+      "Project Name"
+    );
     if (!initName) {
       skipped++;
       await prisma.importRowResult.create({
@@ -511,30 +639,44 @@ async function importCet(
     }
 
     const phase = get(row, "Phase");
-    const teamsRaw = get(row, "Teams");
-    const start = coerceDate(row["Start Date"]);
-    const end = coerceDate(row["End Date"]);
+    const teamsRaw = get(row, "Teams", "Team(s)");
+    const start = coerceDate(rowVal(row, "Start Date"));
+    const end = coerceDate(rowVal(row, "End Date"));
     const typ = get(row, "Type");
     const statusRaw = get(row, "Status");
     const notes = get(row, "Notes");
     const jira = get(row, "Jira");
     const themeName = get(row, "Theme");
     const businessObjective = get(row, "Business Objective");
-    const cap = parsePercent(row["Capacity Allocation Estimate"]);
-    const sprints = parseSprintEstimate(row["# of Sprints Estimate"]);
+    const sponsor = pickBusinessSponsorFromRow(row);
+    const cap = parsePercent(rowVal(row, "Capacity Allocation Estimate"));
+    const sprints = parseSprintEstimate(rowVal(row, "# of Sprints Estimate"));
 
-    const desc = descByInit.get(initName);
+    const desc = resolveInitiativeDescription(
+      initName,
+      themeName || undefined,
+      descIndex,
+      INITIATIVE_DESCRIPTION_ALIASES_CET
+    );
+    const sponsorExtra = sponsor
+      ? {
+          businessSponsor: sponsor,
+          businessSponsorId: await ensureBusinessSponsor(workspaceId, sponsor),
+        }
+      : {};
+
     const theme =
       themeName &&
       (await upsertTheme(
         workspaceId,
         themeName,
-        undefined,
+        cetThemeObjectives.get(themeName) || undefined,
         themeOrder.counter++,
         roadmap.id
       ));
 
     const initiative = await upsertInitiative(workspaceId, initName, {
+      ...sponsorExtra,
       shortObjective:
         desc?.short ??
         (businessObjective ? businessObjective.slice(0, 500) : null),
@@ -585,10 +727,12 @@ async function importCet(
     });
 
     if (phase) {
+      const def = await ensurePhaseDefinitionByName(prisma, workspaceId, phase);
       await prisma.phaseSegment.create({
         data: {
           roadmapItemId: item.id,
-          phaseName: phase,
+          phaseName: def.name,
+          phaseDefinitionId: def.id,
           startDate: start,
           endDate: end,
           capacityAllocationEstimate: cap ?? undefined,
@@ -599,7 +743,7 @@ async function importCet(
       });
     }
 
-    const teamIds = await ensureTeams(workspaceId, teamsRaw);
+    const teamIds = await ensureTeams(teamsRaw);
     for (const teamId of teamIds) {
       await prisma.roadmapItemTeam.create({
         data: { roadmapItemId: item.id, teamId },
@@ -639,18 +783,16 @@ async function main() {
     process.exit(1);
   }
 
-  const dcxPath = path.join(dataDir, "2026 Product Roadmap - DCX.xlsx");
-  const cetPath = path.join(
-    dataDir,
-    "2026 Product Roadmap (DRAFT) - CET Sales and Marketing.xlsx"
-  );
-
-  for (const p of [dcxPath, cetPath]) {
-    if (!fs.existsSync(p)) {
-      console.error("Missing file:", p);
-      process.exit(1);
-    }
-  }
+  const dcxPath = resolveDataFile(dataDir, [
+    "2026 Roadmap Platform - DCX.xlsx",
+    "2026 Project Roadmap - DCX.xlsx",
+    "2026 Product Roadmap - DCX.xlsx",
+  ]);
+  const cetPath = resolveDataFile(dataDir, [
+    "2026 Roadmap Platform (DRAFT) - CET Sales and Marketing.xlsx",
+    "2026 Project Roadmap (DRAFT) - CET Sales and Marketing.xlsx",
+    "2026 Product Roadmap (DRAFT) - CET Sales and Marketing.xlsx",
+  ]);
 
   const workspace = await ensureWorkspace();
   console.log("Workspace:", workspace.slug, workspace.id);

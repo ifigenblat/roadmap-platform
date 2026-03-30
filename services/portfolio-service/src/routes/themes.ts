@@ -11,6 +11,9 @@ themesRouter.get("/themes", async (req, res) => {
     await prisma.strategicTheme.findMany({
       where: ws ? { workspaceId: ws } : undefined,
       orderBy: { orderIndex: "asc" },
+      include: {
+        roadmap: { select: { id: true, name: true, planningYear: true } },
+      },
     })
   );
 });
@@ -25,16 +28,18 @@ themesRouter.post("/themes", async (req, res) => {
   const { orderIndex, roadmapId, ...themeRest } = parsed.data;
   const roadmapCheck = await assertThemeRoadmapWorkspace(workspaceId, roadmapId ?? null);
   if (!roadmapCheck.ok) return res.status(roadmapCheck.status).json({ message: roadmapCheck.message });
-  res.status(201).json(
-    await prisma.strategicTheme.create({
-      data: {
-        ...themeRest,
-        orderIndex: orderIndex ?? 0,
-        workspaceId,
-        roadmapId: roadmapId ?? null,
-      },
-    })
-  );
+  const created = await prisma.strategicTheme.create({
+    data: {
+      ...themeRest,
+      orderIndex: orderIndex ?? 0,
+      workspaceId,
+      roadmapId: roadmapId ?? null,
+    },
+    include: {
+      roadmap: { select: { id: true, name: true, planningYear: true } },
+    },
+  });
+  res.status(201).json(created);
 });
 
 themesRouter.get("/themes/:id", async (req, res) => {
@@ -63,6 +68,9 @@ themesRouter.patch("/themes/:id", async (req, res) => {
   const updated = await prisma.strategicTheme.update({
     where: { id: req.params.id },
     data: parsed.data,
+    include: {
+      roadmap: { select: { id: true, name: true, planningYear: true } },
+    },
   });
   res.json(updated);
 });

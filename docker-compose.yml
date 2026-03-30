@@ -1,3 +1,5 @@
+name: roadmap-platform
+
 services:
   postgres:
     image: postgres:16
@@ -8,6 +10,12 @@ services:
     ports:
       # Host port defaults to 5433 so another Postgres on 5432 does not collide.
       - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-roadmap_platform}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
     volumes:
       # If Postgres logs "Permission denied" under pg_logical/, the volume has bad ownership.
       # Recreate it (wipes DB data): `./scripts/reset-postgres-docker-volume.sh` or `docker compose down -v && docker compose up -d postgres`
@@ -17,6 +25,12 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
 
 volumes:
   pgdata:

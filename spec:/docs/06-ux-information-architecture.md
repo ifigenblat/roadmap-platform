@@ -1,35 +1,20 @@
 # UX / Information Architecture
 
-## Product navigation
-- Portfolio
-- Roadmaps
-- Initiatives
-- Themes
-- Templates
-- Imports
-- Integrations
-- Admin
+## Product navigation (implemented shell)
 
-## Roadmap workspace layout
+Primary sidebar: **Dashboard**, **Roadmaps**, **Initiatives**, **Themes**, **Teams**, **Phases**, **Business sponsors**, **Imports**, **Templates**, **Settings** (workspaces, integrations, and related options).
 
-### Left rail
-- roadmap selector
-- saved views
-- filters
-- theme / team grouping toggles
+Integrations are reachable under **Settings** (and/or dedicated routes as wired); there is no separate top-level “Integrations” item in the default nav.
 
-### Main canvas
-- timeline view
-- zoom controls
-- date range controls
-- swimlane grouping
-- drag-and-drop roadmap bars and milestones
+## Roadmap workspace
 
-### Right panel
-- selected initiative / roadmap item detail
-- AI actions
-- comments / history
-- linked Jira / Confluence artifacts
+For a selected roadmap (`/roadmaps/[id]`):
+
+- **Grid** — tabular roadmap items with editing, theme/color cues, and phase context
+- **Timeline** — time-based lanes, search, theme-based coloring
+- **Executive** — summary-oriented view fed by `/roadmaps/:id/executive-summary`
+
+Future / partial: saved views, persistent filters, comments panel, Jira link panel — see `00-implementation-status.md`.
 
 ## Design principles
 - table + timeline duality

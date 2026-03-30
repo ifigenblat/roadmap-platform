@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { DateRangeCalendar } from "../components/date-range-calendar";
+import type { DashboardPeriod } from "../lib/dashboard-period";
+import { workspaceOptionLabel } from "../lib/workspace-display";
 
-type Period = "mtd" | "last_month" | "qtd" | "last_q" | "ytd" | "last_year" | "custom";
-
-const PERIODS: { id: Period; label: string }[] = [
+const PERIODS: { id: DashboardPeriod; label: string }[] = [
   { id: "mtd", label: "MTD" },
   { id: "last_month", label: "Last month" },
   { id: "qtd", label: "QTD" },
@@ -15,7 +17,11 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: "custom", label: "Custom" },
 ];
 
-/** Stable pseudo-trend for sparkline (visual only; not historical data). */
+/** Quantize sparkline points so SSR/CSR paths match (avoids hydration mismatch). */
+function q(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 function sparklinePath(seed: number, w: number, h: number): string {
   const n = 14;
   const pts: [number, number][] = [];
@@ -23,7 +29,7 @@ function sparklinePath(seed: number, w: number, h: number): string {
     const t = i / (n - 1);
     const wave = Math.sin(seed * 0.13 + t * 4.2) * 0.22 + Math.cos(seed * 0.07 + t * 2.1) * 0.12;
     const y = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(t * Math.PI)) + wave;
-    pts.push([(t * w) | 0, h - Math.max(2, Math.min(h - 2, y * h))]);
+    pts.push([q(t * w), q(h - Math.max(2, Math.min(h - 2, y * h)))]);
   }
   return pts.map((p) => p.join(",")).join(" ");
 }
@@ -36,6 +42,7 @@ function Sparkline({ seed, className }: { seed: number; className?: string }) {
     <svg width={w} height={h} className={className} viewBox={`0 0 ${w} ${h}`} aria-hidden>
       <polyline
         fill="none"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -80,6 +87,8 @@ function KpiCard({
   );
 }
 
+const BAR_AREA_PX = 208;
+
 function PortfolioBars({
   labels,
   values,
@@ -94,13 +103,16 @@ function PortfolioBars({
     <div className="flex h-52 items-end justify-between gap-2 px-1">
       {labels.map((label, i) => {
         const v = values[i] ?? 0;
-        const pct = Math.round((v / m) * 100);
+        const hPx = Math.max(8, Math.round((v / m) * BAR_AREA_PX));
         return (
           <div key={label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-            <div className="flex w-full flex-1 items-end justify-center">
+            <div
+              className="flex w-full flex-1 items-end justify-center"
+              style={{ minHeight: BAR_AREA_PX }}
+            >
               <div
-                className="w-full max-w-[3rem] rounded-t-md bg-gradient-to-t from-indigo-700 to-sky-500/90 shadow-inner"
-                style={{ height: `${Math.max(8, pct)}%` }}
+                className="w-full max-w-[3rem] rounded-t-md bg-gradient-to-t from-indigo-700 to-sky-500/90 shadow-inner transition-[height]"
+                style={{ height: hPx }}
                 title={`${label}: ${v}`}
               />
             </div>
@@ -173,8 +185,62 @@ export type DashboardStats = {
   itemStatus: Record<string, number>;
 };
 
-export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
-  const [period, setPeriod] = useState<Period>("ytd");
+type WorkspaceOption = { id: string; name: string; slug?: string };
+
+export function ExecutiveDashboardClient({
+  workspaces,
+  stats,
+  initialWorkspaceId,
+  initialPeriod,
+  initialPeriodFrom,
+  initialPeriodTo,
+  periodCaption,
+}: {
+  workspaces: WorkspaceOption[];
+  stats: DashboardStats;
+  initialWorkspaceId: string;
+  initialPeriod: DashboardPeriod;
+  initialPeriodFrom: string;
+  initialPeriodTo: string;
+  periodCaption: string;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const customAnchorRef = useRef<HTMLButtonElement>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const pushFilters = useCallback(
+    (opts: {
+      workspaceId?: string;
+      period?: DashboardPeriod;
+      periodFrom?: string;
+      periodTo?: string;
+      clearPeriodFrom?: boolean;
+      clearPeriodTo?: boolean;
+    }) => {
+      const p = new URLSearchParams(searchParams?.toString() ?? "");
+      if (opts.workspaceId !== undefined) {
+        if (opts.workspaceId) p.set("workspace", opts.workspaceId);
+        else p.delete("workspace");
+      }
+      if (opts.period !== undefined) {
+        p.set("period", opts.period);
+      }
+      if (opts.clearPeriodFrom) p.delete("periodFrom");
+      else if (opts.periodFrom !== undefined) {
+        if (opts.periodFrom) p.set("periodFrom", opts.periodFrom);
+        else p.delete("periodFrom");
+      }
+      if (opts.clearPeriodTo) p.delete("periodTo");
+      else if (opts.periodTo !== undefined) {
+        if (opts.periodTo) p.set("periodTo", opts.periodTo);
+        else p.delete("periodTo");
+      }
+      const qs = p.toString();
+      router.push(qs ? `/?${qs}` : "/", { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   const donutEntries = useMemo(() => {
     const total = stats.roadmapItems || 1;
@@ -201,14 +267,16 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
 
   const s = stats.initiatives + stats.roadmapItems;
 
+  const listQuery = initialWorkspaceId ? { workspace: initialWorkspaceId } : undefined;
+
   return (
     <div className="space-y-6">
-      {/* Title row + filters (look & feel — period is UI state only for now) */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Executive dashboard</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Portfolio snapshot — same data as your workspace; charts summarize live counts.
+            Portfolio snapshot — filters scope counts and the item status mix to the selected period (roadmap items with
+            valid start/end dates that overlap the range).
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
@@ -219,19 +287,34 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
             <select
               id="ws-filter"
               className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-200"
-              defaultValue="all"
+              value={initialWorkspaceId || ""}
+              onChange={(e) => pushFilters({ workspaceId: e.target.value })}
             >
-              <option value="all">All workspaces</option>
+              <option value="">All workspaces</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {workspaceOptionLabel(w)}
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex flex-wrap gap-1 rounded-lg border border-slate-700 bg-slate-900/80 p-1">
             {PERIODS.map((p) => (
               <button
                 key={p.id}
+                ref={p.id === "custom" ? customAnchorRef : undefined}
                 type="button"
-                onClick={() => setPeriod(p.id)}
+                onClick={() => {
+                  if (p.id === "custom") {
+                    pushFilters({ period: "custom" });
+                    setCalendarOpen((o) => !o);
+                    return;
+                  }
+                  setCalendarOpen(false);
+                  pushFilters({ period: p.id, clearPeriodFrom: true, clearPeriodTo: true });
+                }}
                 className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
-                  period === p.id
+                  initialPeriod === p.id
                     ? "bg-sky-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
@@ -240,20 +323,28 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
               </button>
             ))}
           </div>
+          {calendarOpen && initialPeriod === "custom" && (
+            <DateRangeCalendar
+              anchorRef={customAnchorRef}
+              from={initialPeriodFrom}
+              to={initialPeriodTo}
+              onChange={(from, to) => pushFilters({ period: "custom", periodFrom: from, periodTo: to })}
+              onClose={() => setCalendarOpen(false)}
+            />
+          )}
           <div className="text-xs text-slate-500">
-            <span className="hidden sm:inline">View: </span>
-            <span className="text-slate-400">{PERIODS.find((x) => x.id === period)?.label}</span>
+            <span className="hidden sm:inline">Range: </span>
+            <span className="text-slate-400">{periodCaption || PERIODS.find((x) => x.id === initialPeriod)?.label}</span>
           </div>
         </div>
       </div>
 
-      {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Active roadmaps"
           subtitle="Plans in motion"
           value={String(stats.activeRoadmaps)}
-          footer={`${stats.totalRoadmaps} total roadmaps in workspace`}
+          footer={`${stats.totalRoadmaps} total roadmaps in scope`}
           badge={{
             label: stats.activeRoadmaps > 0 ? "Live" : "Idle",
             className:
@@ -262,7 +353,7 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
                 : "bg-slate-600/40 text-slate-400",
           }}
           sparkSeed={stats.activeRoadmaps * 7 + 13}
-          sparkClass="stroke-emerald-400/90"
+          sparkClass="text-emerald-400/90"
         />
         <KpiCard
           title="Initiatives"
@@ -274,42 +365,43 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
             className: "bg-sky-500/20 text-sky-300",
           }}
           sparkSeed={stats.initiatives * 3 + 101}
-          sparkClass="stroke-sky-400/90"
+          sparkClass="text-sky-400/90"
         />
         <KpiCard
           title="Roadmap items"
-          subtitle="Placements on timelines"
+          subtitle="Overlapping selected period"
           value={String(stats.roadmapItems)}
-          footer="Rows across all roadmaps"
+          footer="Items with start/end overlapping the range"
           badge={{
             label: stats.roadmapItems > 20 ? "Dense" : "Lean",
             className: "bg-amber-500/15 text-amber-200",
           }}
           sparkSeed={stats.roadmapItems + 55}
-          sparkClass="stroke-amber-400/85"
+          sparkClass="text-amber-400/85"
         />
         <KpiCard
           title="Strategic themes"
           subtitle="Pillars & groupings"
           value={String(stats.themes)}
-          footer="Workspace + roadmap-scoped"
+          footer="In selected workspace(s)"
           badge={{
             label: stats.themes > 0 ? "Mapped" : "Add themes",
             className:
               stats.themes > 0 ? "bg-violet-500/20 text-violet-200" : "bg-slate-600/40 text-slate-400",
           }}
           sparkSeed={stats.themes * 11 + 3}
-          sparkClass="stroke-violet-400/90"
+          sparkClass="text-violet-400/90"
         />
       </div>
 
-      {/* Charts row */}
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 shadow-inner lg:col-span-3">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold text-slate-100">Portfolio footprint</h2>
-              <p className="text-xs text-slate-500">Relative volume by entity type (live counts)</p>
+              <p className="text-xs text-slate-500">
+                Volume by entity type. Team count is portfolio-wide; other bars use the workspace filter.
+              </p>
             </div>
           </div>
           <PortfolioBars labels={barLabels} values={barValues} max={barMax} />
@@ -317,31 +409,38 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
         <div className="rounded-xl border border-slate-700/80 bg-slate-900/50 p-5 shadow-inner lg:col-span-2">
           <div className="mb-4">
             <h2 className="text-sm font-semibold text-slate-100">Item status mix</h2>
-            <p className="text-xs text-slate-500">All roadmap items — delivery state</p>
+            <p className="text-xs text-slate-500">Roadmap items overlapping the selected period</p>
           </div>
           {stats.roadmapItems === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">No roadmap items yet.</p>
+            <p className="py-8 text-center text-sm text-slate-500">
+              No roadmap items in this period{initialPeriod === "custom" ? " (choose valid start/end dates)" : ""}.
+            </p>
           ) : (
             <StatusDonut entries={donutEntries} />
           )}
         </div>
       </div>
 
-      {/* Bottom strip */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quick actions</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
-              href="/roadmaps"
+              href={listQuery ? { pathname: "/roadmaps", query: listQuery } : "/roadmaps"}
               className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
             >
               Open roadmaps
             </Link>
-            <Link href="/initiatives" className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800">
+            <Link
+              href={listQuery ? { pathname: "/initiatives", query: listQuery } : "/initiatives"}
+              className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800"
+            >
               Initiatives
             </Link>
-            <Link href="/themes" className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800">
+            <Link
+              href={listQuery ? { pathname: "/themes", query: listQuery } : "/themes"}
+              className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-800"
+            >
               Themes
             </Link>
           </div>
@@ -349,8 +448,8 @@ export function ExecutiveDashboardClient({ stats }: { stats: DashboardStats }) {
         <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace pulse</h3>
           <p className="mt-2 text-sm text-slate-400">
-            Combined initiative + item count: <span className="font-semibold text-slate-200">{s}</span> entities in
-            motion. Sparklines are illustrative curves tied to your totals (not stored history).
+            Combined initiative + period-scoped item count:{" "}
+            <span className="font-semibold text-slate-200">{s}</span>. Sparklines are illustrative (not stored history).
           </p>
         </div>
       </div>

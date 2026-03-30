@@ -1,6 +1,7 @@
+// Schema DDL only: runtime uses Sequelize (@roadmap/shared-postgres). Keep in sync with services/shared/postgres/src/models/integration.js
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../node_modules/.prisma-integration-client"
 }
 
 datasource db {
@@ -8,7 +9,6 @@ datasource db {
   url      = env("INTEGRATION_DATABASE_URL")
 }
 
-/// Opaque portfolio workspace id (no cross-service FK).
 model IntegrationConnection {
   id              String    @id @default(cuid())
   workspaceId     String

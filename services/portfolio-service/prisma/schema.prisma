@@ -29,17 +29,53 @@ enum Priority {
 }
 
 model Workspace {
-  id                String            @id @default(cuid())
+  id                String                @id @default(cuid())
   name              String
-  slug              String            @unique
+  slug              String                @unique
   roadmaps          Roadmap[]
   initiatives       Initiative[]
   themes            StrategicTheme[]
   imports           ImportBatch[]
-  teams             Team[]
+  phaseDefinitions  PhaseDefinition[]
   businessSponsors  BusinessSponsor[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  aiSettings        WorkspaceAiSettings?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+}
+
+/// Workspace-wide phase labels (e.g. Discovery, Build) reused across roadmaps via dropdowns.
+model PhaseDefinition {
+  id          String         @id @default(cuid())
+  workspaceId String
+  name        String
+  sortOrder   Int            @default(0)
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+  segments    PhaseSegment[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([workspaceId, name])
+}
+
+/// Per-workspace AI: OpenAI and/or Google Gemini (provider picks which backend for gated routes like executive narrative).
+model WorkspaceAiSettings {
+  workspaceId  String    @id
+  /// openai | gemini — default openai when null.
+  aiProvider   String?
+  openaiModel  String?
+  maxTokens    Int?
+  temperature  Float?
+  /// When set, used instead of OPENAI_API_KEY for AI calls that pass this workspace (via gateway). Restrict database access in production.
+  openaiApiKey String?
+  geminiModel  String?
+  geminiApiKey String?
+  /// OpenAI-compatible HTTP base URL, e.g. http://127.0.0.1:11434/v1 (Ollama). When set, chat uses this instead of api.openai.com.
+  openaiCompatibleBaseUrl String?
+  /// ollama | lmstudio | localai | llamacpp | custom — for UI/docs only.
+  localOpenAiKind         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model BusinessSponsor {
@@ -146,9 +182,12 @@ model RoadmapItem {
 }
 
 model PhaseSegment {
-  id                         String   @id @default(cuid())
+  id                         String           @id @default(cuid())
   roadmapItemId              String
+  /// Denormalized display name; kept in sync when phaseDefinitionId is set.
   phaseName                  String
+  phaseDefinitionId          String?
+  phaseDefinition            PhaseDefinition? @relation(fields: [phaseDefinitionId], references: [id], onDelete: SetNull)
   startDate                  DateTime
   endDate                    DateTime
   capacityAllocationEstimate Float?
@@ -163,12 +202,10 @@ model PhaseSegment {
 }
 
 model Team {
-  id          String            @id @default(cuid())
-  workspaceId String
-  name        String
-  kind        String?
-  active      Boolean           @default(true)
-  workspace   Workspace         @relation(fields: [workspaceId], references: [id])
+  id           String            @id @default(cuid())
+  name         String
+  kind         String?
+  active       Boolean           @default(true)
   roadmapItems RoadmapItemTeam[]
 }
 

@@ -7,6 +7,10 @@
 - external outages must not break the core product
 
 ## Jira integration
+
+**Current implementation:** users register a **Jira Cloud** connection with `siteUrl` (site base URL), Atlassian account **email**, and **API token**. The app stores JSON in `integration_connection` and verifies the connection by calling the **official Jira Cloud REST API v3** (`GET /rest/api/3/myself`) over HTTPS with Basic auth — no separate vendor SDK.
+
+**Roadmap (product):**
 - link roadmap items to epics / initiatives / projects
 - pull status, assignee, dates, labels
 - optionally create Jira epics from roadmap items

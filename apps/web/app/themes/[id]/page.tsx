@@ -2,12 +2,14 @@ import Link from "next/link";
 import { ApiWarning } from "../../../components/api-warning";
 import { AppLayout } from "../../../components/layout";
 import { loadJson } from "../../../lib/api";
+import { themeDetailObjectiveSectionClass } from "../../../lib/strategic-theme-color";
 
 type ThemeDetail = {
   id: string;
   name: string;
   objective?: string | null;
   orderIndex?: number;
+  colorToken?: string | null;
   roadmapId?: string | null;
   roadmap?: { id: string; name: string; planningYear: number } | null;
   initiatives?: Array<{
@@ -52,7 +54,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       {t && (
         <div className="space-y-8">
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <section className={themeDetailObjectiveSectionClass(t.colorToken ?? null)}>
             <h2 className="text-sm font-medium uppercase tracking-wide text-slate-500">Pillar objective</h2>
             <p className="mt-2 whitespace-pre-wrap text-slate-200 leading-relaxed">
               {t.objective?.trim() || "—"}

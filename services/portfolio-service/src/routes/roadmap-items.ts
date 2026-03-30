@@ -8,10 +8,15 @@ import {
   replaceRoadmapItemTeamsSchema,
 } from "@roadmap/types";
 import { prisma } from "../db.js";
+import { resolvePhaseFieldsForWorkspace } from "../phase-definition-helpers.js";
 import {
   assertEndAfterStart,
   assertRoadmapInitiativeSameWorkspace,
 } from "../workspace-guards.js";
+
+const phaseInclude = {
+  include: { phaseDefinition: { select: { id: true, name: true } } },
+} as const;
 
 export const roadmapItemsRouter = Router();
 
@@ -21,7 +26,7 @@ roadmapItemsRouter.get("/roadmap-items/:id", async (req, res) => {
     include: {
       initiative: true,
       roadmap: true,
-      phases: true,
+      phases: phaseInclude,
       teams: { include: { team: true } },
     },
   });
@@ -38,11 +43,10 @@ roadmapItemsRouter.put("/roadmap-items/:id/teams", async (req, res) => {
     include: { roadmap: true },
   });
   if (!item) return res.status(404).json({ message: "Not found" });
-  const wsId = item.roadmap.workspaceId;
   const teamIds = [...new Set(parsed.data.teamIds)];
   for (const teamId of teamIds) {
     const team = await prisma.team.findUnique({ where: { id: teamId } });
-    if (!team || team.workspaceId !== wsId) {
+    if (!team) {
       return res.status(400).json({ message: `Invalid team id: ${teamId}` });
     }
   }
@@ -118,16 +122,28 @@ roadmapItemsRouter.post("/roadmap-items/:id/move", async (req, res) => {
 roadmapItemsRouter.post("/roadmap-items/:id/phases", async (req, res) => {
   const parsed = createPhaseSegmentBodySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const item = await prisma.roadmapItem.findUnique({ where: { id: req.params.id } });
+  const item = await prisma.roadmapItem.findUnique({
+    where: { id: req.params.id },
+    include: { roadmap: true },
+  });
   if (!item) return res.status(404).json({ message: "Not found" });
-  const { startDate, endDate, ...rest } = parsed.data;
+  const wsId = item.roadmap.workspaceId;
+  const { startDate, endDate, phaseDefinitionId, phaseName, ...optionalFields } = parsed.data;
+  const resolved = await resolvePhaseFieldsForWorkspace(prisma, wsId, {
+    phaseDefinitionId,
+    phaseName,
+  });
+  if (!resolved.ok) return res.status(resolved.status).json({ message: resolved.message });
   const phase = await prisma.phaseSegment.create({
     data: {
-      ...rest,
+      ...optionalFields,
       roadmapItemId: item.id,
+      phaseName: resolved.phaseName,
+      phaseDefinitionId: resolved.phaseDefinitionId,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
     },
+    include: phaseInclude.include,
   });
   res.status(201).json(phase);
 });
@@ -136,8 +152,12 @@ roadmapItemsRouter.patch("/phase-segments/:id", async (req, res) => {
   const id = String(req.params.id);
   const parsed = patchPhaseSegmentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const existing = await prisma.phaseSegment.findUnique({ where: { id } });
+  const existing = await prisma.phaseSegment.findUnique({
+    where: { id },
+    include: { roadmapItem: { include: { roadmap: true } } },
+  });
   if (!existing) return res.status(404).json({ message: "Not found" });
+  const wsId = existing.roadmapItem.roadmap.workspaceId;
   const d = parsed.data;
   const nextStart = d.startDate !== undefined ? d.startDate : existing.startDate.toISOString();
   const nextEnd = d.endDate !== undefined ? d.endDate : existing.endDate.toISOString();
@@ -145,7 +165,22 @@ roadmapItemsRouter.patch("/phase-segments/:id", async (req, res) => {
     return res.status(400).json({ message: "endDate must be on or after startDate" });
   }
   const data: Record<string, unknown> = {};
-  if (d.phaseName !== undefined) data.phaseName = d.phaseName;
+  if (d.phaseDefinitionId !== undefined) {
+    if (d.phaseDefinitionId === null) {
+      data.phaseDefinitionId = null;
+      if (d.phaseName !== undefined) data.phaseName = d.phaseName.trim();
+    } else {
+      const resolved = await resolvePhaseFieldsForWorkspace(prisma, wsId, {
+        phaseDefinitionId: d.phaseDefinitionId,
+      });
+      if (!resolved.ok) return res.status(resolved.status).json({ message: resolved.message });
+      data.phaseDefinitionId = resolved.phaseDefinitionId;
+      data.phaseName = resolved.phaseName;
+    }
+  } else if (d.phaseName !== undefined) {
+    data.phaseName = d.phaseName.trim();
+    data.phaseDefinitionId = null;
+  }
   if (d.startDate !== undefined) data.startDate = new Date(d.startDate);
   if (d.endDate !== undefined) data.endDate = new Date(d.endDate);
   if (d.capacityAllocationEstimate !== undefined) {
@@ -159,6 +194,7 @@ roadmapItemsRouter.patch("/phase-segments/:id", async (req, res) => {
   const updated = await prisma.phaseSegment.update({
     where: { id },
     data,
+    include: phaseInclude.include,
   });
   res.json(updated);
 });
@@ -166,7 +202,7 @@ roadmapItemsRouter.patch("/phase-segments/:id", async (req, res) => {
 /** Legacy: list all items (not in public API contract). */
 roadmapItemsRouter.get("/roadmap-items", async (_req, res) => {
   const rows = await prisma.roadmapItem.findMany({
-    include: { initiative: true, roadmap: true, phases: true },
+    include: { initiative: true, roadmap: true, phases: phaseInclude },
   });
   res.json(rows);
 });

@@ -11,7 +11,9 @@ fi
 : "${PORTFOLIO_DATABASE_URL:?Set PORTFOLIO_DATABASE_URL in .env (see .env.example)}"
 : "${TEMPLATE_DATABASE_URL:?Set TEMPLATE_DATABASE_URL in .env}"
 : "${INTEGRATION_DATABASE_URL:?Set INTEGRATION_DATABASE_URL in .env}"
+: "${AUTH_DATABASE_URL:?Set AUTH_DATABASE_URL in .env (see .env.example)}"
 
 npm exec -w @roadmap/portfolio-service -- prisma db push
 npm exec -w @roadmap/template-service -- prisma db push
 npm exec -w @roadmap/integration-service -- prisma db push
+npm exec -w @roadmap/auth-service -- prisma db push

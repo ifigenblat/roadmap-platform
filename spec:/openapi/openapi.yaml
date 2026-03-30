@@ -3,19 +3,21 @@ info:
   title: Roadmap Platform API
   version: 0.1.0
   description: |
-    External REST API (BFF prefix `/api`). See `docs/05-api-contracts.md`.
+    External REST API (BFF prefix `/api`). See `docs/05-api-contracts.md` and `docs/00-implementation-status.md`.
+    For routes not listed here (e.g. teams, sponsors, global themes list), see `services/gateway/src/index.js`.
 
     **Domain rules (P4):** Roadmap items reject initiative/roadmap pairs from different workspaces.
     Strategic themes with a `roadmapId` must target a roadmap in the same workspace. Initiative
     sponsors must belong to the initiative workspace. List endpoints support optional `?workspaceId=`
     for tenant-scoped reads.
 servers:
-  - url: http://localhost:4000/api
+  - url: http://localhost:4010/api
     description: Local API gateway
 tags:
   - name: Workspaces
   - name: Roadmaps
   - name: RoadmapItems
+  - name: PhaseDefinitions
   - name: Initiatives
   - name: Themes
   - name: Templates
@@ -126,6 +128,30 @@ paths:
     patch:
       tags: [RoadmapItems]
       summary: Update phase segment
+  /phase-definitions:
+    get:
+      tags: [PhaseDefinitions]
+      summary: List workspace phase definitions
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          schema: { type: string }
+    post:
+      tags: [PhaseDefinitions]
+      summary: Create phase definition
+  /phase-definitions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [PhaseDefinitions]
+      summary: Update phase definition (renames denormalized segment labels)
+    delete:
+      tags: [PhaseDefinitions]
+      summary: Delete phase definition (blocked if segments still reference it)
   /initiatives:
     get:
       tags: [Initiatives]
@@ -212,10 +238,34 @@ paths:
     post:
       tags: [Integrations]
       summary: Register Confluence connection
+  /integrations/cursor/connect:
+    post:
+      tags: [Integrations]
+      summary: Register Cursor Cloud Agents connection (opaque config)
   /integrations/{id}/sync:
     post:
       tags: [Integrations]
-      summary: Record sync (stub)
+      summary: Sync or verify connection (Jira Cloud calls REST v3 /myself)
+  /integrations/jira/stateless/me:
+    post:
+      tags: [Integrations]
+      summary: Verify Jira credentials from request body (not persisted)
+  /integrations/jira/stateless/issue/get:
+    post:
+      tags: [Integrations]
+      summary: Get issue by key using credentials in body
+  /integrations/jira/stateless/issue:
+    put:
+      tags: [Integrations]
+      summary: Update issue (write) using credentials in body
+  /integrations/jira/stateless/issue/create:
+    post:
+      tags: [Integrations]
+      summary: Create issue using credentials in body
+  /integrations/jira/stateless/search:
+    post:
+      tags: [Integrations]
+      summary: JQL search using credentials in body
   /external-links:
     get:
       tags: [Integrations]

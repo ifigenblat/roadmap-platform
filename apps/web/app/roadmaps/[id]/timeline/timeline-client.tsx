@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DatePickerField } from "../../../../components/date-picker-field";
 import { FormModal, ModalActions } from "../../../../components/form-modal";
+import { PageToolbar } from "../../../../components/page-toolbar";
 import { sendJson } from "../../../../lib/api";
+import { themeBarTintColor } from "../../../../lib/strategic-theme-color";
+import { assignLanesInDisplayOrder, laneCountFromMap, type SegmentForLane } from "./timeline-lanes";
 import { ToastViewport, useToasts } from "../../../../lib/toast";
-import { assignLanes, laneCountFromMap, type SegmentForLane } from "./timeline-lanes";
 import {
   buildTicks,
   buildYearSpans,
@@ -32,11 +35,13 @@ export type TimelineItem = {
   initiative: {
     id: string;
     canonicalName: string;
-    themes?: Array<{ strategicTheme: { id: string; name: string } }>;
+    themes?: Array<{ strategicTheme: { id: string; name: string; colorToken?: string | null } }>;
   };
   phases: Array<{
     id: string;
     phaseName: string;
+    phaseDefinitionId?: string | null;
+    phaseDefinition?: { id: string; name: string } | null;
     startDate: string;
     endDate: string;
     status?: string | null;
@@ -63,6 +68,7 @@ export type ItemEditForm = {
 
 /** String form state for PATCH /phase-segments/:id */
 export type PhaseEditForm = {
+  phaseDefinitionId: string;
   phaseName: string;
   startDate: string;
   endDate: string;
@@ -90,6 +96,8 @@ export type TimelineSegment = {
   status: string;
   groupTheme: string;
   groupTeam: string;
+  /** First linked theme’s color token (bar tint). */
+  themeColorToken?: string | null;
   /** Form defaults when opening the editor (item row vs phase row). */
   itemForm?: ItemEditForm;
   phaseForm?: PhaseEditForm;
@@ -122,13 +130,18 @@ function safeYmd(s: string, fallback: string): string {
   return isValidYmd(t) ? t : fallback;
 }
 
-function toSegments(items: TimelineItem[]): TimelineSegment[] {
+function toSegments(
+  items: TimelineItem[],
+  workspacePhases: { id: string; name: string }[]
+): TimelineSegment[] {
   const out: TimelineSegment[] = [];
   for (const item of items) {
     const theme =
       (item.initiative.themes ?? []).map((t) => t.strategicTheme.name).join(", ") || "Ungrouped";
     const team =
       item.teams.map((t) => t.team.name).join(", ") || "Unassigned";
+    const themeColorToken =
+      item.initiative.themes?.[0]?.strategicTheme.colorToken ?? null;
 
     if (item.phases.length === 0) {
       let start = safeYmd(item.startDate, "1970-01-01");
@@ -152,6 +165,7 @@ function toSegments(items: TimelineItem[]): TimelineSegment[] {
         status: item.status,
         groupTheme: theme,
         groupTeam: team,
+        themeColorToken,
         itemForm: {
           titleOverride: item.titleOverride ?? "",
           status: item.status,
@@ -174,21 +188,29 @@ function toSegments(items: TimelineItem[]): TimelineSegment[] {
         start = end;
         end = t;
       }
+      const phaseDisplay = ph.phaseDefinition?.name ?? ph.phaseName;
+      const byId = ph.phaseDefinitionId?.trim();
+      const resolvedDefId =
+        byId && workspacePhases.some((p) => p.id === byId)
+          ? byId
+          : workspacePhases.find((p) => p.name === phaseDisplay)?.id ?? "";
       out.push({
         key: `${item.id}-${ph.id}`,
         itemId: item.id,
         phaseSegmentId: ph.id,
         initiativeId: item.initiative.id,
         initiativeName: item.initiative.canonicalName,
-        label: `${item.initiative.canonicalName} — ${ph.phaseName}`,
-        phaseName: ph.phaseName,
+        label: `${item.initiative.canonicalName} — ${phaseDisplay}`,
+        phaseName: phaseDisplay,
         start,
         end,
         status: ph.status || item.status,
         groupTheme: theme,
         groupTeam: team,
+        themeColorToken,
         phaseForm: {
-          phaseName: ph.phaseName,
+          phaseDefinitionId: resolvedDefId,
+          phaseName: phaseDisplay,
           startDate: start,
           endDate: end,
           status: ph.status ?? "",
@@ -306,18 +328,38 @@ export type GroupMode = "theme" | "team" | "flat";
 
 export type TimelineDomainMode = "data" | "roadmap";
 
+export type BarSortKey = "label" | "start" | "end" | "status";
+
+const TIMELINE_CUSTOM_PHASE_VALUE = "__custom_phase__";
+
+function sortTimelineRows(
+  rows: TimelineSegment[],
+  key: BarSortKey,
+  dir: "asc" | "desc",
+): TimelineSegment[] {
+  const m = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === "start") return m * (ymdToMs(a.start) - ymdToMs(b.start));
+    if (key === "end") return m * (ymdToMs(a.end) - ymdToMs(b.end));
+    if (key === "status") return m * a.status.localeCompare(b.status);
+    return m * a.label.localeCompare(b.label);
+  });
+}
+
 export function TimelineClient({
   roadmapId,
   roadmapName,
   roadmapStart,
   roadmapEnd,
   items,
+  workspacePhases,
 }: {
   roadmapId: string;
   roadmapName: string;
   roadmapStart: string;
   roadmapEnd: string;
   items: TimelineItem[];
+  workspacePhases: { id: string; name: string }[];
 }) {
   const [zoom, setZoom] = useState<TimelineZoom>("quarter");
   const [groupBy, setGroupBy] = useState<GroupMode>("theme");
@@ -327,9 +369,13 @@ export function TimelineClient({
   const [itemForm, setItemForm] = useState<ItemEditForm | null>(null);
   const [phaseForm, setPhaseForm] = useState<PhaseEditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [barSearch, setBarSearch] = useState("");
+  const [barSort, setBarSort] = useState<BarSortKey>("label");
+  const [barSortDir, setBarSortDir] = useState<"asc" | "desc">("asc");
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
   const todayLineRef = useRef<HTMLDivElement | null>(null);
+  const chartScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const clear = () => setHoverTip(null);
@@ -341,7 +387,20 @@ export function TimelineClient({
     };
   }, []);
 
-  const segments = useMemo(() => toSegments(items), [items]);
+  const segments = useMemo(() => toSegments(items, workspacePhases), [items, workspacePhases]);
+
+  const displaySegments = useMemo(() => {
+    const q = barSearch.trim().toLowerCase();
+    if (!q) return segments;
+    return segments.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.initiativeName.toLowerCase().includes(q) ||
+        s.groupTheme.toLowerCase().includes(q) ||
+        s.groupTeam.toLowerCase().includes(q) ||
+        (s.phaseName && s.phaseName.toLowerCase().includes(q)),
+    );
+  }, [segments, barSearch]);
 
   const roadmapWindow = useMemo(() => {
     const rs = sliceYmd(roadmapStart);
@@ -365,11 +424,10 @@ export function TimelineClient({
     };
   }, [roadmapStart, roadmapEnd]);
 
+  /** Min/max of segment dates only — do not clamp to roadmap bounds (that made "Fit data" identical to roadmap window). */
   const dataDomain = useMemo(() => {
-    const rs = sliceYmd(roadmapStart);
-    const re = sliceYmd(roadmapEnd);
-    let lo = isValidYmd(rs) ? ymdToMs(rs) : Number.POSITIVE_INFINITY;
-    let hi = isValidYmd(re) ? ymdToMs(re) : Number.NEGATIVE_INFINITY;
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
 
     for (const s of segments) {
       const a = ymdToMs(s.start);
@@ -382,10 +440,24 @@ export function TimelineClient({
     }
 
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo > hi) {
-      const now = new Date();
-      const y = now.getUTCFullYear();
-      lo = Date.UTC(y, 0, 1);
-      hi = Date.UTC(y, 11, 31);
+      const rs = sliceYmd(roadmapStart);
+      const re = sliceYmd(roadmapEnd);
+      if (isValidYmd(rs) && isValidYmd(re)) {
+        let r0 = ymdToMs(rs);
+        let r1 = ymdToMs(re);
+        if (r0 > r1) {
+          const t = r0;
+          r0 = r1;
+          r1 = t;
+        }
+        lo = r0;
+        hi = r1;
+      } else {
+        const now = new Date();
+        const y = now.getUTCFullYear();
+        lo = Date.UTC(y, 0, 1);
+        hi = Date.UTC(y, 11, 31);
+      }
     }
 
     const pad = 86400000 * 14;
@@ -417,7 +489,7 @@ export function TimelineClient({
 
   const groups = useMemo(() => {
     const map = new Map<string, TimelineSegment[]>();
-    for (const s of segments) {
+    for (const s of displaySegments) {
       const key =
         groupBy === "theme"
           ? s.groupTheme
@@ -430,18 +502,17 @@ export function TimelineClient({
     const keys = [...map.keys()].filter((k) => k !== "__all__").sort((a, b) => a.localeCompare(b));
     if (map.has("__all__")) keys.unshift("__all__");
     return keys.map((k) => {
-      const rows = (map.get(k) ?? []).sort((a, b) => a.label.localeCompare(b.label));
-      const lanes = assignLanes(rows as SegmentForLane[]);
+      const rows = sortTimelineRows(map.get(k) ?? [], barSort, barSortDir);
+      const lanes = assignLanesInDisplayOrder(rows as SegmentForLane[]);
       const lanesN = laneCountFromMap(lanes);
       return {
         title: k === "__all__" ? "Roadmap" : k,
         rows,
         lanes,
-        lanesN,
         heightPx: Math.max(LANE_HEIGHT_PX, lanesN * LANE_HEIGHT_PX + 8),
       };
     });
-  }, [segments, groupBy]);
+  }, [displaySegments, groupBy, barSort, barSortDir]);
 
   function barStyle(startIso: string, endIso: string): { left: string; width: string } {
     let a = ymdToMs(startIso);
@@ -473,6 +544,18 @@ export function TimelineClient({
       : null;
 
   const chartAreaStyle = { minWidth: Math.max(400, chartMinWidth) };
+
+  function scrollTodayIntoChartView() {
+    const line = todayLineRef.current;
+    const scroller = chartScrollRef.current;
+    if (!line || !scroller || todayLeft == null) return;
+    const lineRect = line.getBoundingClientRect();
+    const scRect = scroller.getBoundingClientRect();
+    const lineCenterX = lineRect.left + lineRect.width / 2;
+    const viewCenterX = scRect.left + scroller.clientWidth / 2;
+    const delta = lineCenterX - viewCenterX;
+    scroller.scrollBy({ left: delta, behavior: "smooth" });
+  }
 
   function openBarEdit(row: TimelineSegment) {
     setEditRow(row);
@@ -516,8 +599,7 @@ export function TimelineClient({
       }
       setEditSaving(true);
       try {
-        await sendJson(`/api/phase-segments/${editRow.phaseSegmentId}`, "PATCH", {
-          phaseName: phaseForm.phaseName.trim(),
+        const phaseBody: Record<string, unknown> = {
           startDate: start,
           endDate: end,
           status: phaseForm.status.trim() || null,
@@ -526,7 +608,23 @@ export function TimelineClient({
           teamSummary: phaseForm.teamSummary.trim() || null,
           jiraKey: phaseForm.jiraKey.trim() || null,
           notes: phaseForm.notes.trim() || null,
-        });
+        };
+        if (workspacePhases.length > 0) {
+          if (phaseForm.phaseDefinitionId.trim()) {
+            phaseBody.phaseDefinitionId = phaseForm.phaseDefinitionId.trim();
+          } else {
+            const nm = phaseForm.phaseName.trim();
+            if (!nm) {
+              push("Select a workspace phase or enter a custom name.", "error");
+              setEditSaving(false);
+              return;
+            }
+            phaseBody.phaseName = nm;
+          }
+        } else {
+          phaseBody.phaseName = phaseForm.phaseName.trim();
+        }
+        await sendJson(`/api/phase-segments/${editRow.phaseSegmentId}`, "PATCH", phaseBody);
         push("Phase updated.");
         closeBarEdit();
         router.refresh();
@@ -593,6 +691,12 @@ export function TimelineClient({
   return (
     <div className="space-y-4">
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
+      <PageToolbar
+        searchPlaceholder="Search bars by initiative, phase, theme, team…"
+        searchValue={barSearch}
+        onSearchChange={setBarSearch}
+        searchId="timeline-bar-search"
+      />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wide text-slate-500">Zoom</span>
@@ -622,6 +726,41 @@ export function TimelineClient({
             <option value="team">By team</option>
             <option value="flat">Single swimlane</option>
           </select>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-slate-500">Sort bars</span>
+          <select
+            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+            value={barSort}
+            onChange={(e) => setBarSort(e.target.value as BarSortKey)}
+          >
+            <option value="label">Bar label</option>
+            <option value="start">Start date</option>
+            <option value="end">End date</option>
+            <option value="status">Status</option>
+          </select>
+          <div className="flex rounded-lg border border-slate-700 p-0.5">
+            <button
+              type="button"
+              title="Ascending"
+              onClick={() => setBarSortDir("asc")}
+              className={`rounded-md px-2.5 py-1.5 text-xs ${
+                barSortDir === "asc" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              ↑ Asc
+            </button>
+            <button
+              type="button"
+              title="Descending"
+              onClick={() => setBarSortDir("desc")}
+              className={`rounded-md px-2.5 py-1.5 text-xs ${
+                barSortDir === "desc" ? "bg-slate-700 text-white" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              ↓ Desc
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs uppercase tracking-wide text-slate-500">Window</span>
@@ -655,19 +794,16 @@ export function TimelineClient({
           type="button"
           className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-40"
           disabled={todayLeft == null}
-          onClick={() =>
-            todayLineRef.current?.scrollIntoView({
-              behavior: "smooth",
-              inline: "center",
-              block: "nearest",
-            })
-          }
+          onClick={scrollTodayIntoChartView}
         >
           Scroll to today
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-inner">
+      <div
+        ref={chartScrollRef}
+        className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 shadow-inner"
+      >
         <div className="min-w-0" style={{ minWidth: chartMinWidth + 300 }}>
           {segments.length === 0 && (
             <div className="border-b border-slate-700 px-4 py-10 text-center text-sm text-slate-400">
@@ -757,6 +893,7 @@ export function TimelineClient({
                     const top = 4 + lane * LANE_HEIGHT_PX;
                     const vis = barVisual(row.status);
                     const st = barStyle(row.start, row.end);
+                    const tint = themeBarTintColor(row.themeColorToken ?? null);
                     return (
                       <div
                         key={row.key}
@@ -783,26 +920,44 @@ export function TimelineClient({
                       >
                         <Link
                           href={`/initiatives/${row.initiativeId}`}
-                          className={`flex min-w-0 flex-1 flex-col justify-center overflow-hidden rounded-l-md border border-slate-600/25 px-2 py-1 transition hover:brightness-105 hover:ring-2 hover:ring-indigo-500/40 ${vis.bar}`}
+                          className={`relative flex min-w-0 flex-1 flex-col justify-center overflow-hidden rounded-l-md border border-slate-600/25 px-2 py-1 transition hover:brightness-105 hover:ring-2 hover:ring-indigo-500/40 ${vis.bar}`}
                           aria-label={`${barTitle(row)}, ${formatDateRangePretty(row.start, row.end)}`}
                         >
-                          <span className={`line-clamp-2 text-[11px] font-semibold leading-tight ${vis.text}`}>
+                          {tint ? (
+                            <span
+                              className="pointer-events-none absolute inset-0 rounded-l-md"
+                              style={{ backgroundColor: tint }}
+                              aria-hidden
+                            />
+                          ) : null}
+                          <span
+                            className={`relative z-[1] line-clamp-2 text-[11px] font-semibold leading-tight ${vis.text}`}
+                          >
                             {barTitle(row)}
                           </span>
-                          <span className={`truncate text-[10px] leading-tight opacity-90 ${vis.text}`}>
+                          <span
+                            className={`relative z-[1] truncate text-[10px] leading-tight opacity-90 ${vis.text}`}
+                          >
                             {formatDateRangePretty(row.start, row.end)}
                           </span>
                         </Link>
                         <button
                           type="button"
                           title="Edit row"
-                          className={`flex h-full w-[22px] min-w-[22px] max-w-[22px] shrink-0 items-center justify-center rounded-r-md border-l border-slate-600/40 px-0.5 transition hover:brightness-110 ${vis.bar}`}
+                          className={`relative flex h-full w-[22px] min-w-[22px] max-w-[22px] shrink-0 items-center justify-center rounded-r-md border-l border-slate-600/40 px-0.5 transition hover:brightness-110 ${vis.bar}`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             openBarEdit(row);
                           }}
                         >
+                          {tint ? (
+                            <span
+                              className="pointer-events-none absolute inset-0 rounded-r-md"
+                              style={{ backgroundColor: tint }}
+                              aria-hidden
+                            />
+                          ) : null}
                           <svg
                             width="12"
                             height="12"
@@ -810,7 +965,7 @@ export function TimelineClient({
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
-                            className={vis.text}
+                            className={`relative z-[1] ${vis.text}`}
                             aria-hidden
                           >
                             <path d="M12 20h9" strokeLinecap="round" />
@@ -850,36 +1005,98 @@ export function TimelineClient({
         <form onSubmit={saveBarEdit}>
             {phaseForm && editRow?.phaseSegmentId ? (
               <div className="mt-4 space-y-4">
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-slate-400">Phase name</span>
-                  <input
-                    required
-                    className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
-                    value={phaseForm.phaseName}
-                    onChange={(e) => setPhaseForm((f) => (f ? { ...f, phaseName: e.target.value } : f))}
-                  />
-                </label>
+                {workspacePhases.length > 0 ? (
+                  <>
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span className="text-slate-400">Phase</span>
+                      <select
+                        className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                        value={phaseForm.phaseDefinitionId.trim() || TIMELINE_CUSTOM_PHASE_VALUE}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setPhaseForm((f) => {
+                            if (!f) return f;
+                            if (v === TIMELINE_CUSTOM_PHASE_VALUE) {
+                              return { ...f, phaseDefinitionId: "" };
+                            }
+                            const p = workspacePhases.find((x) => x.id === v);
+                            return {
+                              ...f,
+                              phaseDefinitionId: v,
+                              phaseName: p ? p.name : f.phaseName,
+                            };
+                          });
+                        }}
+                        disabled={editSaving}
+                      >
+                        {workspacePhases.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                        <option value={TIMELINE_CUSTOM_PHASE_VALUE}>Custom name…</option>
+                      </select>
+                    </label>
+                    {!phaseForm.phaseDefinitionId.trim() && (
+                      <label className="flex flex-col gap-1 text-sm">
+                        <span className="text-slate-400">Custom phase name</span>
+                        <input
+                          className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                          value={phaseForm.phaseName}
+                          onChange={(e) =>
+                            setPhaseForm((f) => (f ? { ...f, phaseName: e.target.value } : f))
+                          }
+                          placeholder="One-off label (not linked to catalog)"
+                        />
+                      </label>
+                    )}
+                    <p className="text-xs text-slate-500">
+                      Shared phases are managed under{" "}
+                      <Link href="/phases" className="text-indigo-400 hover:text-indigo-300">
+                        Phases
+                      </Link>
+                      .
+                    </p>
+                  </>
+                ) : (
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-slate-400">Phase name</span>
+                    <input
+                      required
+                      className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                      value={phaseForm.phaseName}
+                      onChange={(e) =>
+                        setPhaseForm((f) => (f ? { ...f, phaseName: e.target.value } : f))
+                      }
+                    />
+                    <span className="text-xs text-slate-500">
+                      Add reusable phases on the{" "}
+                      <Link href="/phases" className="text-indigo-400 hover:text-indigo-300">
+                        Phases
+                      </Link>{" "}
+                      page for a dropdown.
+                    </span>
+                  </label>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-slate-400">Start</span>
-                    <input
-                      type="date"
-                      required
-                      className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
-                      value={phaseForm.startDate.slice(0, 10)}
-                      onChange={(e) => setPhaseForm((f) => (f ? { ...f, startDate: e.target.value } : f))}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-slate-400">End</span>
-                    <input
-                      type="date"
-                      required
-                      className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
-                      value={phaseForm.endDate.slice(0, 10)}
-                      onChange={(e) => setPhaseForm((f) => (f ? { ...f, endDate: e.target.value } : f))}
-                    />
-                  </label>
+                  <DatePickerField
+                    label="Start Date"
+                    value={phaseForm.startDate.slice(0, 10)}
+                    onChange={(next) =>
+                      setPhaseForm((f) => (f ? { ...f, startDate: next } : f))
+                    }
+                    disabled={editSaving}
+                    required
+                  />
+                  <DatePickerField
+                    label="End Date"
+                    value={phaseForm.endDate.slice(0, 10)}
+                    onChange={(next) =>
+                      setPhaseForm((f) => (f ? { ...f, endDate: next } : f))
+                    }
+                    disabled={editSaving}
+                    required
+                  />
                 </div>
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-slate-400">Status (optional)</span>
@@ -943,7 +1160,7 @@ export function TimelineClient({
             {itemForm && editRow && !editRow.phaseSegmentId ? (
               <div className="mt-4 space-y-4">
                 <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-slate-400">Title override</span>
+                  <span className="text-slate-400">Initiative/Project</span>
                   <input
                     className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
                     value={itemForm.titleOverride}
@@ -982,26 +1199,24 @@ export function TimelineClient({
                   </label>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-slate-400">Start</span>
-                    <input
-                      type="date"
-                      required
-                      className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
-                      value={itemForm.startDate.slice(0, 10)}
-                      onChange={(e) => setItemForm((f) => (f ? { ...f, startDate: e.target.value } : f))}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span className="text-slate-400">End</span>
-                    <input
-                      type="date"
-                      required
-                      className="rounded-md border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
-                      value={itemForm.endDate.slice(0, 10)}
-                      onChange={(e) => setItemForm((f) => (f ? { ...f, endDate: e.target.value } : f))}
-                    />
-                  </label>
+                  <DatePickerField
+                    label="Start Date"
+                    value={itemForm.startDate.slice(0, 10)}
+                    onChange={(next) =>
+                      setItemForm((f) => (f ? { ...f, startDate: next } : f))
+                    }
+                    disabled={editSaving}
+                    required
+                  />
+                  <DatePickerField
+                    label="End Date"
+                    value={itemForm.endDate.slice(0, 10)}
+                    onChange={(next) =>
+                      setItemForm((f) => (f ? { ...f, endDate: next } : f))
+                    }
+                    disabled={editSaving}
+                    required
+                  />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1 text-sm">

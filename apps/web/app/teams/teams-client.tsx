@@ -17,7 +17,6 @@ export function TeamsClient({ initial }: { initial: TeamRow[] }) {
   const [rows, setRows] = useState(initial);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("");
-  const [workspaceId, setWorkspaceId] = useState("");
   const [busy, setBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -39,7 +38,6 @@ export function TeamsClient({ initial }: { initial: TeamRow[] }) {
       const created = await sendJson<TeamRow>("/api/teams", "POST", {
         name,
         kind: kind || undefined,
-        workspaceId: workspaceId || undefined,
       });
       setRows((prev) => [created, ...prev]);
       setName("");
@@ -97,12 +95,15 @@ export function TeamsClient({ initial }: { initial: TeamRow[] }) {
           </button>
         }
       />
+      <p className="mb-3 text-sm text-slate-400">
+        Teams are shared across all workspaces and can be assigned on any roadmap grid.
+      </p>
 
       <FormModal
         open={createOpen}
         onClose={() => !busy && setCreateOpen(false)}
         title="New team"
-        subtitle="Creates a team in the workspace."
+        subtitle="Creates a global team you can assign to initiatives on any roadmap."
       >
         <form onSubmit={onCreate} className="mt-4 space-y-4">
           <label className="flex flex-col gap-1 text-sm">
@@ -121,14 +122,6 @@ export function TeamsClient({ initial }: { initial: TeamRow[] }) {
               value={kind}
               onChange={(e) => setKind(e.target.value)}
               placeholder="e.g. squad"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-slate-400">Workspace ID (optional)</span>
-            <input
-              className={modalFieldClass}
-              value={workspaceId}
-              onChange={(e) => setWorkspaceId(e.target.value)}
             />
           </label>
           <ModalActions>

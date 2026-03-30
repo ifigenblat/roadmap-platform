@@ -1,6 +1,20 @@
 import { createRequire } from "node:module";
 import { basename } from "node:path";
 import { ItemStatus, PrismaClient, RoadmapStatus } from "./generated/prisma/index.js";
+import {
+  buildInitiativeDescriptionIndex,
+  INITIATIVE_DESCRIPTION_ALIASES_CET,
+  InitiativeDescriptionEntry,
+  keyedRowsFromAoA,
+  normalizeHeaderKey,
+  pickBusinessSponsorFromRow,
+  resolveInitiativeDescription,
+} from "./xlsxColumnPickers.js";
+import {
+  integrationCreateExternalLink,
+  integrationHasExternalLink,
+} from "./integrationClient.js";
+import { ensurePhaseDefinitionByName } from "./phase-definition-helpers.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx") as typeof import("xlsx");
@@ -57,18 +71,38 @@ function mapStatus(raw: string): ItemStatus {
   return ItemStatus.not_started;
 }
 
-function sheetRows(ws: import("xlsx").WorkSheet): RowObj[] {
-  return XLSX.utils.sheet_to_json<RowObj>(ws, { defval: "", raw: false });
+function keyedSheetRows(ws: import("xlsx").WorkSheet): {
+  rows: RowObj[];
+  headerRow0Based: number;
+  headerScore: number;
+} {
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: "",
+    raw: false,
+  }) as unknown[][];
+  return keyedRowsFromAoA(aoa);
 }
 
 function get(row: RowObj, ...keys: string[]): string {
   for (const key of keys) {
-    const match = Object.keys(row).find(
-      (rk) => rk.trim().toLowerCase() === key.trim().toLowerCase()
-    );
-    if (match) return str(row[match]);
+    const want = normalizeHeaderKey(key);
+    const match = Object.keys(row).find((rk) => normalizeHeaderKey(rk) === want);
+    if (match) {
+      const v = str(row[match]);
+      if (v !== "") return v;
+    }
   }
   return "";
+}
+
+function rowVal(row: RowObj, ...aliases: string[]): unknown {
+  for (const a of aliases) {
+    const want = normalizeHeaderKey(a);
+    const k = Object.keys(row).find((rk) => normalizeHeaderKey(rk) === want);
+    if (k !== undefined) return row[k];
+  }
+  return undefined;
 }
 
 function rowPayloadJson(row: RowObj): Record<string, string> {
@@ -88,6 +122,8 @@ async function upsertInitiative(
     notes?: string | null;
     sourceSystem?: string | null;
     sourceReference?: string | null;
+    businessSponsor?: string | null;
+    businessSponsorId?: string | null;
   }
 ) {
   const found = await prisma.initiative.findFirst({
@@ -103,6 +139,12 @@ async function upsertInitiative(
         notes: extra.notes ?? found.notes,
         sourceSystem: extra.sourceSystem ?? found.sourceSystem,
         sourceReference: extra.sourceReference ?? found.sourceReference,
+        businessSponsor:
+          extra.businessSponsor !== undefined ? extra.businessSponsor : found.businessSponsor,
+        businessSponsorId:
+          extra.businessSponsorId !== undefined
+            ? extra.businessSponsorId
+            : found.businessSponsorId,
       },
     });
   }
@@ -116,6 +158,8 @@ async function upsertInitiative(
       notes: extra.notes ?? null,
       sourceSystem: extra.sourceSystem ?? null,
       sourceReference: extra.sourceReference ?? null,
+      businessSponsor: extra.businessSponsor ?? null,
+      businessSponsorId: extra.businessSponsorId ?? null,
     },
   });
 }
@@ -165,17 +209,40 @@ async function linkInitiativeTheme(
   }
 }
 
-async function ensureTeams(prisma: PrismaClient, workspaceId: string, raw: string) {
+/** Reuse or create a BusinessSponsor row so initiatives link for the sponsors UI. */
+async function ensureBusinessSponsor(
+  prisma: PrismaClient,
+  workspaceId: string,
+  displayName: string
+): Promise<string> {
+  const name = displayName.trim();
+  if (!name) throw new Error("ensureBusinessSponsor: empty displayName");
+
+  const candidates = await prisma.businessSponsor.findMany({
+    where: { workspaceId },
+    select: { id: true, displayName: true },
+  });
+  const lower = name.toLowerCase();
+  const hit = candidates.find((c) => c.displayName.trim().toLowerCase() === lower);
+  if (hit) return hit.id;
+
+  const row = await prisma.businessSponsor.create({
+    data: { workspaceId, displayName: name },
+  });
+  return row.id;
+}
+
+async function ensureTeams(prisma: PrismaClient, raw: string) {
   const parts = raw
     .split(/[,;/]/)
     .map((s) => s.trim())
     .filter(Boolean);
   const teamIds: string[] = [];
   for (const name of parts) {
-    let team = await prisma.team.findFirst({ where: { workspaceId, name } });
+    let team = await prisma.team.findFirst({ where: { name } });
     if (!team) {
       team = await prisma.team.create({
-        data: { workspaceId, name, kind: "imported" },
+        data: { name, kind: "imported" },
       });
     }
     teamIds.push(team.id);
@@ -186,7 +253,11 @@ async function ensureTeams(prisma: PrismaClient, workspaceId: string, raw: strin
 export async function processWorkbookImport(
   prisma: PrismaClient,
   importBatchId: string,
-  filePath: string
+  filePath: string,
+  options?: {
+    roadmapId?: string;
+    roadmapName?: string;
+  }
 ) {
   const batch = await prisma.importBatch.findUnique({ where: { id: importBatchId } });
   if (!batch) throw new Error("Import batch not found");
@@ -197,52 +268,122 @@ export async function processWorkbookImport(
   });
 
   const wb = XLSX.readFile(filePath);
-  const dataWs = wb.Sheets["Data"];
-  if (!dataWs) {
-    throw new Error("Workbook is missing required 'Data' sheet");
+  const dataSheetName = Object.keys(wb.Sheets).find(
+    (n) => normalizeHeaderKey(n) === "data"
+  );
+  if (!dataSheetName) {
+    const names = Object.keys(wb.Sheets).join(", ");
+    throw new Error(
+      `Workbook is missing a 'Data' sheet (case-insensitive). Found sheets: ${names || "(none)"}`
+    );
   }
+  const dataWs = wb.Sheets[dataSheetName]!;
 
-  const descriptions = new Map<string, { short?: string; long?: string }>();
-  const descWs = wb.Sheets["Initiative Descriptions"];
+  const descEntries: InitiativeDescriptionEntry[] = [];
+  const descSheetName = Object.keys(wb.Sheets).find(
+    (n) => normalizeHeaderKey(n) === normalizeHeaderKey("Initiative Descriptions")
+  );
+  const descWs = descSheetName ? wb.Sheets[descSheetName] : undefined;
   if (descWs) {
-    for (const row of sheetRows(descWs)) {
+    for (const row of keyedSheetRows(descWs).rows) {
       const name = get(row, "Initiative");
       if (!name) continue;
-      descriptions.set(name, {
+      descEntries.push({
+        name,
         short: get(row, "Succinct Business Objective (For Tracking Sheets)") || undefined,
         long: get(row, "Detailed Business Objective (For Slides)") || undefined,
+        pillar: get(row, "Strategic Pillar") || undefined,
       });
     }
   }
+  const descIndex = buildInitiativeDescriptionIndex(descEntries);
+
+  const fileNorm = normalizeHeaderKey(basename(batch.sourceFileName));
+  const useCetDescAliases =
+    fileNorm.includes("cet") && !fileNorm.includes("dcx");
+  const descriptionAliases = useCetDescAliases ? INITIATIVE_DESCRIPTION_ALIASES_CET : {};
 
   const themeObjectives = new Map<string, string>();
-  const themeWs = wb.Sheets["Strategic Themes"];
+  const themeSheetName = Object.keys(wb.Sheets).find(
+    (n) => normalizeHeaderKey(n) === normalizeHeaderKey("Strategic Themes")
+  );
+  const themeWs = themeSheetName ? wb.Sheets[themeSheetName] : undefined;
   if (themeWs) {
-    for (const row of sheetRows(themeWs)) {
+    for (const row of keyedSheetRows(themeWs).rows) {
       const name = get(row, "Strategic Pillar");
       const objective = get(row, "Pillar Objective");
-      if (name) themeObjectives.set(name, objective);
+      const included = get(row, "Initiatives Included");
+      if (name) {
+        const parts: string[] = [];
+        if (objective) parts.push(objective);
+        if (included) parts.push(`Initiatives included: ${included}`);
+        themeObjectives.set(name, parts.join("\n\n"));
+      }
     }
   }
 
-  const nowSlug = `${slugify(basename(batch.sourceFileName, ".xlsx"))}-${Date.now()
+  const dataKeyed = keyedSheetRows(dataWs);
+  const rows = dataKeyed.rows;
+  const dataHeaderRow0 = dataKeyed.headerRow0Based;
+  const dataHeaderScore = dataKeyed.headerScore;
+  if (rows.length === 0) {
+    throw new Error(
+      "The Data sheet has no rows after the header. Check that row 1 is column headers and data starts on row 2, or remove blank rows above the table."
+    );
+  }
+
+  const summaryObj =
+    typeof batch.summaryJson === "object" && batch.summaryJson !== null
+      ? (batch.summaryJson as Record<string, unknown>)
+      : {};
+  const targetRoadmapId =
+    options?.roadmapId ??
+    (typeof summaryObj.targetRoadmapId === "string" ? summaryObj.targetRoadmapId : undefined);
+  const targetRoadmapName =
+    options?.roadmapName ??
+    (typeof summaryObj.targetRoadmapName === "string" ? summaryObj.targetRoadmapName : undefined);
+
+  const roadmap =
+    targetRoadmapId && targetRoadmapId.trim()
+      ? await prisma.roadmap.findFirst({
+          where: { id: targetRoadmapId.trim(), workspaceId: batch.workspaceId },
+        })
+      : null;
+  if (targetRoadmapId && !roadmap) {
+    throw new Error("Selected roadmap was not found in this workspace.");
+  }
+
+  const nowSlug = `${slugify((targetRoadmapName || basename(batch.sourceFileName, ".xlsx")).trim())}-${Date.now()
     .toString(36)
     .slice(-6)}`;
+  const yearFromFile = (() => {
+    const m = basename(batch.sourceFileName).match(/(20\d{2})/);
+    if (!m) return null;
+    const y = Number(m[1]);
+    return Number.isFinite(y) ? y : null;
+  })();
+  const planningYear = yearFromFile ?? new Date().getUTCFullYear();
 
-  const roadmap = await prisma.roadmap.create({
-    data: {
-      workspaceId: batch.workspaceId,
-      name: basename(batch.sourceFileName, ".xlsx"),
-      slug: nowSlug,
-      description: `Imported from ${batch.sourceFileName}`,
-      planningYear: new Date().getUTCFullYear(),
-      startDate: new Date(`${new Date().getUTCFullYear()}-01-01T00:00:00Z`),
-      endDate: new Date(`${new Date().getUTCFullYear()}-12-31T00:00:00Z`),
-      status: RoadmapStatus.draft,
-    },
-  });
+  const createdRoadmap =
+    roadmap ??
+    (targetRoadmapName && targetRoadmapName.trim()
+      ? await prisma.roadmap.create({
+          data: {
+            workspaceId: batch.workspaceId,
+            name: targetRoadmapName.trim(),
+            slug: nowSlug,
+            description: `Imported from ${batch.sourceFileName}`,
+            planningYear,
+            startDate: new Date(`${planningYear}-01-01T00:00:00Z`),
+            endDate: new Date(`${planningYear}-12-31T00:00:00Z`),
+            status: RoadmapStatus.draft,
+          },
+        })
+      : null);
+  if (!createdRoadmap) {
+    throw new Error("Import requires a roadmap selection or a new roadmap name.");
+  }
 
-  const rows = sheetRows(dataWs);
   let sortOrder = 0;
   let imported = 0;
   let skipped = 0;
@@ -250,14 +391,22 @@ export async function processWorkbookImport(
 
   await prisma.importBatch.update({
     where: { id: batch.id },
-    data: { roadmapId: roadmap.id },
+    data: { roadmapId: createdRoadmap.id },
   });
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNumber = i + 2;
+    const rowNumber = dataHeaderRow0 + i + 2;
     try {
-      const initiativeName = get(row, "Initiative/Project", "Initiative Name");
+      const initiativeName = get(
+        row,
+        "Initiative/Project",
+        "Initiative / Project",
+        "Initiative Name",
+        "Initiative",
+        "Project",
+        "Project Name"
+      );
       if (!initiativeName) {
         skipped++;
         await prisma.importRowResult.create({
@@ -283,13 +432,32 @@ export async function processWorkbookImport(
       const jira = get(row, "Jira");
       const themeName = get(row, "Theme");
       const businessObjective = get(row, "Business Objective");
-      const start = toDate(row["Start Date"]);
-      const end = toDate(row["End Date"]);
-      const capEstimate = parsePercent(row["Capacity Allocation Estimate"]);
-      const sprintEstimate = parseNumber(row["# of Sprints Estimate"]);
-      const desc = descriptions.get(initiativeName);
+      const sponsorLabel = pickBusinessSponsorFromRow(row);
+      const start = toDate(rowVal(row, "Start Date", "Start Quarter 2026"));
+      const end = toDate(rowVal(row, "End Date", "End Quarter 2026"));
+      const capEstimate = parsePercent(rowVal(row, "Capacity Allocation Estimate"));
+      const sprintEstimate = parseNumber(rowVal(row, "# of Sprints Estimate"));
+      const desc = resolveInitiativeDescription(
+        initiativeName,
+        themeName || undefined,
+        descIndex,
+        descriptionAliases
+      );
+
+      const sponsorExtra =
+        sponsorLabel.length > 0
+          ? {
+              businessSponsor: sponsorLabel,
+              businessSponsorId: await ensureBusinessSponsor(
+                prisma,
+                batch.workspaceId,
+                sponsorLabel
+              ),
+            }
+          : {};
 
       const initiative = await upsertInitiative(prisma, batch.workspaceId, initiativeName, {
+        ...sponsorExtra,
         shortObjective:
           desc?.short ?? (businessObjective ? businessObjective.slice(0, 500) : null),
         detailedObjective: desc?.long ?? (businessObjective || null),
@@ -304,7 +472,7 @@ export async function processWorkbookImport(
         const theme = await upsertTheme(
           prisma,
           batch.workspaceId,
-          roadmap.id,
+          createdRoadmap.id,
           themeName,
           themeObjectives.get(themeName)
         );
@@ -312,9 +480,34 @@ export async function processWorkbookImport(
         await linkInitiativeTheme(prisma, initiative.id, theme.id);
       }
 
+      if (jira) {
+        const exists = await integrationHasExternalLink(batch.workspaceId, {
+          entityType: "initiative",
+          entityId: initiative.id,
+          provider: "jira",
+          externalId: jira,
+        });
+        if (!exists) {
+          try {
+            await integrationCreateExternalLink({
+              workspaceId: batch.workspaceId,
+              entityType: "initiative",
+              entityId: initiative.id,
+              provider: "jira",
+              externalId: jira,
+              externalUrl: jira.includes("://") ? jira : `jira:${jira}`,
+              syncState: "linked",
+              metadataJson: { source: "workbook-upload" },
+            });
+          } catch (error) {
+            console.warn("integrationCreateExternalLink:", error);
+          }
+        }
+      }
+
       const item = await prisma.roadmapItem.create({
         data: {
-          roadmapId: roadmap.id,
+          roadmapId: createdRoadmap.id,
           initiativeId: initiative.id,
           titleOverride: phaseName ? `${initiativeName} - ${phaseName}` : null,
           status: mapStatus(status),
@@ -325,10 +518,13 @@ export async function processWorkbookImport(
         },
       });
 
+      const phaseLabel = phaseName || "Execution";
+      const phaseDef = await ensurePhaseDefinitionByName(prisma, batch.workspaceId, phaseLabel);
       await prisma.phaseSegment.create({
         data: {
           roadmapItemId: item.id,
-          phaseName: phaseName || "Execution",
+          phaseName: phaseDef.name,
+          phaseDefinitionId: phaseDef.id,
           startDate: start,
           endDate: end,
           capacityAllocationEstimate: capEstimate ?? undefined,
@@ -340,7 +536,7 @@ export async function processWorkbookImport(
         },
       });
 
-      const teamIds = await ensureTeams(prisma, batch.workspaceId, teamsRaw);
+      const teamIds = await ensureTeams(prisma, teamsRaw);
       for (const teamId of teamIds) {
         const existing = await prisma.roadmapItemTeam.findUnique({
           where: { roadmapItemId_teamId: { roadmapItemId: item.id, teamId } },
@@ -373,13 +569,33 @@ export async function processWorkbookImport(
           sheetName: "Data",
           rowNumber,
           entityType: "row",
-          entityKey: get(row, "Initiative/Project", "Initiative Name"),
+          entityKey: get(
+            row,
+            "Initiative/Project",
+            "Initiative / Project",
+            "Initiative Name",
+            "Initiative",
+            "Project",
+            "Project Name"
+          ),
           status: "error",
           message: error instanceof Error ? error.message : String(error),
           rawPayloadJson: rowPayloadJson(row),
         },
       });
     }
+  }
+
+  if (imported === 0 && failed === 0 && rows.length > 0) {
+    const sampleKeys = Object.keys(rows[0] ?? {})
+      .filter((k) => str((rows[0] as RowObj)[k]) !== "")
+      .slice(0, 20)
+      .join(", ");
+    const allKeys = Object.keys(rows[0] ?? {}).join(", ");
+    throw new Error(
+      `No rows imported (${rows.length} data rows; all skipped). Put the initiative name in a column such as "Initiative Name" or "Initiative/Project". ` +
+        `Non-empty columns in row 1: ${sampleKeys || "(none)"}. All header cells: ${allKeys || "(none)"}`
+    );
   }
 
   await prisma.importBatch.update({
@@ -392,10 +608,14 @@ export async function processWorkbookImport(
         imported,
         skipped,
         failed,
-        createdRoadmapId: roadmap.id,
+        createdRoadmapId: createdRoadmap.id,
+        selectedRoadmapId: targetRoadmapId ?? null,
+        selectedRoadmapName: targetRoadmapName ?? null,
+        dataSheetHeaderRow0Based: dataHeaderRow0,
+        dataSheetHeaderScore: dataHeaderScore,
       },
     },
   });
 
-  return { roadmapId: roadmap.id, rows: rows.length, imported, skipped, failed };
+  return { roadmapId: createdRoadmap.id, rows: rows.length, imported, skipped, failed };
 }

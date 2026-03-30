@@ -32,6 +32,23 @@ The richer workbook should be treated as the canonical import model.
 
 ## Canonical entities
 
+### phase_definition
+- id
+- workspace_id
+- name (unique per workspace)
+- sort_order
+- created_at
+- updated_at
+
+Segments (`phase_segment`) may reference `phase_definition_id`; display name on the segment is denormalized and kept in sync when the definition is renamed.
+
+### workspace_ai_settings
+- workspace_id (PK)
+- ai_provider (e.g. openai | gemini)
+- openai_model, gemini_model, max_tokens, temperature
+- optional per-workspace API key fields (treat as secrets in production)
+- created_at, updated_at
+
 ### roadmap
 - id
 - workspace_id
@@ -55,7 +72,15 @@ The richer workbook should be treated as the canonical import model.
 - name
 - objective
 - order_index
-- color_token
+- **color_token** (nullable; UI palette key for theme chips, timeline, grid accents)
+- created_at
+- updated_at
+
+### business_sponsor
+- id
+- workspace_id
+- display_name
+- email, title, department, notes (optional)
 - created_at
 - updated_at
 
@@ -65,7 +90,8 @@ The richer workbook should be treated as the canonical import model.
 - canonical_name
 - short_objective
 - detailed_objective
-- business_sponsor
+- **business_sponsor** (legacy free-text label, e.g. from import)
+- **business_sponsor_id** nullable (FK to `business_sponsor`)
 - owner_user_id nullable
 - type
 - notes
@@ -98,7 +124,8 @@ The richer workbook should be treated as the canonical import model.
 ### phase_segment
 - id
 - roadmap_item_id
-- phase_name
+- **phase_definition_id** nullable (FK to `phase_definition`)
+- phase_name (display string; aligned with definition when linked)
 - start_date
 - end_date
 - capacity_allocation_estimate nullable
@@ -131,9 +158,9 @@ The richer workbook should be treated as the canonical import model.
 ### integration_connection
 - id
 - workspace_id
-- provider
+- provider (e.g. jira, confluence, cursor)
 - connection_name
-- config_encrypted
+- config_encrypted (JSON string; **Jira Cloud** expects `siteUrl`, `email`, `apiToken` — see types package)
 - status
 - last_sync_at nullable
 

@@ -15,13 +15,33 @@ type ImportBatchRow = {
   summaryJson?: Record<string, unknown> | null;
 };
 
+type RoadmapOption = { id: string; name: string };
+type WorkspaceRow = { id: string; name: string; slug: string };
+
 export default async function Page() {
-  const res = await loadJson<ImportBatchRow[]>("/api/imports");
+  const [importsRes, roadmapsRes, workspacesRes] = await Promise.all([
+    loadJson<ImportBatchRow[]>("/api/imports"),
+    loadJson<RoadmapOption[]>("/api/roadmaps"),
+    loadJson<WorkspaceRow[]>("/api/workspaces"),
+  ]);
+
+  const warning = !importsRes.ok
+    ? importsRes.message
+    : !roadmapsRes.ok
+      ? roadmapsRes.message
+      : !workspacesRes.ok
+        ? workspacesRes.message
+        : "";
+
   return (
     <AppLayout>
       <h1 className="text-2xl font-semibold mb-4">Imports</h1>
-      {!res.ok && <ApiWarning message={res.message} />}
-      <ImportsClient initial={res.ok ? res.data : []} />
+      {!!warning && <ApiWarning message={warning} />}
+      <ImportsClient
+        initial={importsRes.ok ? importsRes.data : []}
+        roadmaps={roadmapsRes.ok ? roadmapsRes.data : []}
+        workspaces={workspacesRes.ok ? workspacesRes.data : []}
+      />
     </AppLayout>
   );
 }

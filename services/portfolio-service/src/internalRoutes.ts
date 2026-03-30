@@ -5,6 +5,32 @@ import { processWorkbookImport } from "./workbook-import.js";
 
 export const internalRouter = Router();
 
+/** Server-to-server: full runtime for gateway → ai-service (includes optional API key). */
+internalRouter.get(
+  "/internal/workspaces/:workspaceId/ai-runtime",
+  requireInternalKey,
+  async (req, res) => {
+    const workspaceId = String(req.params.workspaceId);
+    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+    if (!ws) return res.status(404).json({ message: "Workspace not found" });
+    const row = await prisma.workspaceAiSettings.findUnique({
+      where: { workspaceId },
+    });
+    const provider = row?.aiProvider?.trim().toLowerCase() === "gemini" ? "gemini" : "openai";
+    res.json({
+      provider,
+      model: row?.openaiModel?.trim() || null,
+      geminiModel: row?.geminiModel?.trim() || null,
+      maxTokens: row?.maxTokens ?? null,
+      temperature: row?.temperature ?? null,
+      openaiApiKey: row?.openaiApiKey?.trim() || null,
+      geminiApiKey: row?.geminiApiKey?.trim() || null,
+      openaiCompatibleBaseUrl: row?.openaiCompatibleBaseUrl?.trim() || null,
+      localOpenAiKind: row?.localOpenAiKind?.trim() || null,
+    });
+  }
+);
+
 internalRouter.get(
   "/internal/default-workspace-id",
   requireInternalKey,
@@ -37,8 +63,19 @@ internalRouter.post(
     if (!filePath) {
       return res.status(400).json({ message: "Missing filePath in body or summaryJson.filePath" });
     }
+    const targetRoadmapId =
+      typeof summary.targetRoadmapId === "string" && summary.targetRoadmapId.trim().length > 0
+        ? summary.targetRoadmapId.trim()
+        : undefined;
+    const targetRoadmapName =
+      typeof summary.targetRoadmapName === "string" && summary.targetRoadmapName.trim().length > 0
+        ? summary.targetRoadmapName.trim()
+        : undefined;
     try {
-      const result = await processWorkbookImport(prisma, id, filePath);
+      const result = await processWorkbookImport(prisma, id, filePath, {
+        roadmapId: targetRoadmapId,
+        roadmapName: targetRoadmapName,
+      });
       return res.json({ ok: true, importBatchId: id, ...result });
     } catch (error) {
       await prisma.importBatch.update({

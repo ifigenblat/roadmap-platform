@@ -56,12 +56,12 @@ roadmapsRouter.get("/roadmaps/:id/items", async (req, res) => {
           sponsor: true,
           themes: {
             include: {
-              strategicTheme: { select: { id: true, name: true } },
+              strategicTheme: { select: { id: true, name: true, colorToken: true } },
             },
           },
         },
       },
-      phases: true,
+      phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
       teams: { include: { team: true } },
     },
     orderBy: { sortOrder: "asc" },
@@ -115,6 +115,91 @@ roadmapsRouter.post("/roadmaps/:id/themes", async (req, res) => {
   res.status(201).json(row);
 });
 
+/**
+ * Removes roadmap rows, phases, item–team links, roadmap-scoped strategic themes,
+ * then the roadmap. Initiatives with no remaining roadmap items are removed.
+ * Imported teams with no remaining item links are removed. Import batches keep
+ * their row but `roadmapId` is set null (FK on delete).
+ */
+roadmapsRouter.delete("/roadmaps/:id", async (req, res) => {
+  const id = req.params.id;
+  const existing = await prisma.roadmap.findUnique({ where: { id } });
+  if (!existing) return res.status(404).json({ message: "Roadmap not found" });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const items = await tx.roadmapItem.findMany({
+      where: { roadmapId: id },
+      select: { id: true, initiativeId: true },
+    });
+    const itemIds = items.map((i) => i.id);
+    const initiativeIds = [...new Set(items.map((i) => i.initiativeId))];
+    let candidateTeamIds: string[] = [];
+    let deletedImportedTeams = 0;
+
+    if (itemIds.length > 0) {
+      const links = await tx.roadmapItemTeam.findMany({
+        where: { roadmapItemId: { in: itemIds } },
+        select: { teamId: true },
+      });
+      candidateTeamIds = [...new Set(links.map((l) => l.teamId))];
+      await tx.phaseSegment.deleteMany({ where: { roadmapItemId: { in: itemIds } } });
+      await tx.roadmapItemTeam.deleteMany({ where: { roadmapItemId: { in: itemIds } } });
+    }
+    await tx.roadmapItem.deleteMany({ where: { roadmapId: id } });
+
+    if (candidateTeamIds.length > 0) {
+      const importedTeams = await tx.team.findMany({
+        where: {
+          id: { in: candidateTeamIds },
+          kind: "imported",
+        },
+        select: { id: true },
+      });
+      const orphanTeamIds: string[] = [];
+      for (const t of importedTeams) {
+        const remaining = await tx.roadmapItemTeam.count({ where: { teamId: t.id } });
+        if (remaining === 0) orphanTeamIds.push(t.id);
+      }
+      if (orphanTeamIds.length > 0) {
+        const del = await tx.team.deleteMany({ where: { id: { in: orphanTeamIds } } });
+        deletedImportedTeams = del.count;
+      }
+    }
+
+    const themes = await tx.strategicTheme.findMany({
+      where: { roadmapId: id },
+      select: { id: true },
+    });
+    const themeIds = themes.map((t) => t.id);
+    const deletedStrategicThemes = themeIds.length;
+    if (themeIds.length > 0) {
+      await tx.initiativeTheme.deleteMany({ where: { strategicThemeId: { in: themeIds } } });
+      await tx.strategicTheme.deleteMany({ where: { id: { in: themeIds } } });
+    }
+
+    await tx.roadmap.delete({ where: { id } });
+
+    let deletedOrphanInitiatives = 0;
+    for (const initiativeId of initiativeIds) {
+      const remaining = await tx.roadmapItem.count({ where: { initiativeId } });
+      if (remaining === 0) {
+        await tx.initiativeTheme.deleteMany({ where: { initiativeId } });
+        await tx.initiative.delete({ where: { id: initiativeId } });
+        deletedOrphanInitiatives += 1;
+      }
+    }
+
+    return {
+      deletedRoadmapId: id,
+      deletedStrategicThemes,
+      deletedImportedTeams,
+      deletedOrphanInitiatives,
+    };
+  });
+
+  res.json({ ok: true, ...result });
+});
+
 roadmapsRouter.patch("/roadmaps/:id", async (req, res) => {
   const parsed = patchRoadmapSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
@@ -145,7 +230,10 @@ roadmapsRouter.post("/roadmaps/:id/clone", async (req, res) => {
     where: { id: req.params.id },
     include: {
       items: {
-        include: { phases: true, teams: true },
+        include: {
+          phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
+          teams: true,
+        },
         orderBy: { sortOrder: "asc" },
       },
     },
@@ -193,6 +281,7 @@ roadmapsRouter.post("/roadmaps/:id/clone", async (req, res) => {
           data: {
             roadmapItemId: nit.id,
             phaseName: ph.phaseName,
+            phaseDefinitionId: ph.phaseDefinitionId ?? null,
             startDate: ph.startDate,
             endDate: ph.endDate,
             capacityAllocationEstimate: ph.capacityAllocationEstimate,
@@ -217,7 +306,10 @@ roadmapsRouter.post("/roadmaps/:id/clone", async (req, res) => {
     where: { id: clone.id },
     include: {
       items: {
-        include: { initiative: true, phases: true },
+        include: {
+          initiative: true,
+          phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
+        },
         orderBy: { sortOrder: "asc" },
       },
     },
@@ -274,7 +366,7 @@ roadmapsRouter.get("/roadmaps/:id/executive-summary", async (req, res) => {
           themes: { include: { strategicTheme: true } },
         },
       },
-      phases: true,
+      phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
     },
     orderBy: { sortOrder: "asc" },
   });
@@ -329,6 +421,7 @@ roadmapsRouter.get("/roadmaps/:id/executive-summary", async (req, res) => {
         name: string;
         objective: string | null;
         orderIndex: number;
+        colorToken: string | null;
       };
       initiatives: ReturnType<typeof summaryFromAgg>[];
     }
@@ -353,6 +446,7 @@ roadmapsRouter.get("/roadmaps/:id/executive-summary", async (req, res) => {
             name: st.name,
             objective: st.objective ?? null,
             orderIndex: st.orderIndex ?? 0,
+            colorToken: st.colorToken ?? null,
           },
           initiatives: [],
         });
@@ -382,6 +476,7 @@ roadmapsRouter.get("/roadmaps/:id/executive-summary", async (req, res) => {
       name: roadmap.name,
       planningYear: roadmap.planningYear,
       status: roadmap.status,
+      workspaceId: roadmap.workspaceId,
     },
     generatedAt: new Date().toISOString(),
     themes: themesOut,
@@ -396,7 +491,7 @@ roadmapsRouter.get("/roadmaps/:id", async (req, res) => {
       items: {
         include: {
           initiative: true,
-          phases: true,
+          phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
         },
         orderBy: { sortOrder: "asc" },
       },

@@ -10,8 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "@roadmap/types": ["packages/types/src"],
-      "@roadmap/config/*": ["packages/config/*"]
+      "@roadmap/types": ["packages/types/src"]
     }
   }
 }

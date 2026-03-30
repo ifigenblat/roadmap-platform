@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { PageToolbar } from "../../../../components/page-toolbar";
 import { sendJson } from "../../../../lib/api";
+import { themeExecutiveCardClass } from "../../../../lib/strategic-theme-color";
 import { ToastViewport, useToasts } from "../../../../lib/toast";
 
 type ExecApi = {
   roadmap: { id: string; name: string; planningYear: number; status: string };
   generatedAt: string;
   themes: Array<{
-    strategicTheme: { id: string; name: string; objective: string | null; orderIndex: number };
+    strategicTheme: {
+      id: string;
+      name: string;
+      objective: string | null;
+      orderIndex: number;
+      colorToken?: string | null;
+    };
     initiatives: Array<{
       initiativeId: string;
       canonicalName: string;
@@ -53,7 +61,31 @@ function toAiBundle(data: ExecApi) {
 export function ExecutiveClient({ initial }: { initial: ExecApi }) {
   const [narrative, setNarrative] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [summarySearch, setSummarySearch] = useState("");
   const { toasts, push, dismiss } = useToasts();
+
+  const filteredThemes = useMemo(() => {
+    const q = summarySearch.trim().toLowerCase();
+    if (!q) return initial.themes;
+    return initial.themes.filter((block) => {
+      const blob = [
+        block.strategicTheme.name,
+        block.strategicTheme.objective ?? "",
+        ...block.initiatives.flatMap((i) => [i.canonicalName, i.shortObjective ?? ""]),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [initial.themes, summarySearch]);
+
+  const filteredUngrouped = useMemo(() => {
+    const q = summarySearch.trim().toLowerCase();
+    if (!q) return initial.ungroupedInitiatives;
+    return initial.ungroupedInitiatives.filter((i) =>
+      `${i.canonicalName} ${i.shortObjective ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [initial.ungroupedInitiatives, summarySearch]);
 
   async function generateNarrative() {
     setBusy(true);
@@ -95,6 +127,12 @@ export function ExecutiveClient({ initial }: { initial: ExecApi }) {
   return (
     <>
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
+      <PageToolbar
+        searchPlaceholder="Search themes and initiatives in this summary…"
+        searchValue={summarySearch}
+        onSearchChange={setSummarySearch}
+        searchId="executive-summary-search"
+      />
       <div className="mb-6 flex flex-wrap gap-3">
         <button
           type="button"
@@ -148,8 +186,11 @@ export function ExecutiveClient({ initial }: { initial: ExecApi }) {
         <p className="mt-1 text-xs text-slate-500">Generated {new Date(initial.generatedAt).toLocaleString()}</p>
 
         <div className="mt-6 space-y-8">
-          {initial.themes.map((block) => (
-            <div key={block.strategicTheme.id}>
+          {filteredThemes.map((block) => (
+            <div
+              key={block.strategicTheme.id}
+              className={themeExecutiveCardClass(block.strategicTheme.colorToken ?? null)}
+            >
               <h3 className="text-lg font-medium text-slate-100">{block.strategicTheme.name}</h3>
               {block.strategicTheme.objective ? (
                 <p className="mt-1 text-sm text-slate-400 whitespace-pre-wrap">{block.strategicTheme.objective}</p>
@@ -173,12 +214,12 @@ export function ExecutiveClient({ initial }: { initial: ExecApi }) {
             </div>
           ))}
 
-          {initial.ungroupedInitiatives.length > 0 && (
+          {filteredUngrouped.length > 0 && (
             <div>
               <h3 className="text-lg font-medium text-amber-200/90">Ungrouped initiatives</h3>
               <p className="mt-1 text-sm text-slate-500">Not linked to a strategic theme on this roadmap.</p>
               <ul className="mt-4 space-y-3">
-                {initial.ungroupedInitiatives.map((i) => (
+                {filteredUngrouped.map((i) => (
                   <li key={i.initiativeId} className="rounded-lg border border-slate-800 bg-slate-950/50 p-4">
                     <p className="font-medium text-slate-200">{i.canonicalName}</p>
                     <p className="mt-2 text-xs text-slate-500">

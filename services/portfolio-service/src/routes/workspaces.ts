@@ -1,6 +1,11 @@
 import { Router } from "express";
-import { createWorkspaceSchema, patchWorkspaceSchema } from "@roadmap/types";
+import {
+  createWorkspaceSchema,
+  patchWorkspaceAiSettingsSchema,
+  patchWorkspaceSchema,
+} from "@roadmap/types";
 import { prisma } from "../db.js";
+import { requireAdminForWorkspaceCreate } from "../gatewayAuth.js";
 
 export const workspacesRouter = Router();
 
@@ -29,7 +34,7 @@ workspacesRouter.get("/workspaces", async (_req, res) => {
   res.json(rows);
 });
 
-workspacesRouter.post("/workspaces", async (req, res) => {
+workspacesRouter.post("/workspaces", requireAdminForWorkspaceCreate, async (req, res) => {
   const parsed = createWorkspaceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
   const { name, slug: slugIn } = parsed.data;
@@ -45,6 +50,176 @@ workspacesRouter.post("/workspaces", async (req, res) => {
     data: { name: name.trim(), slug },
   });
   res.status(201).json(row);
+});
+
+workspacesRouter.get("/workspaces/:id/ai-settings", async (req, res) => {
+  const existing = await prisma.workspace.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ message: "Workspace not found" });
+  const row = await prisma.workspaceAiSettings.findUnique({
+    where: { workspaceId: req.params.id },
+  });
+  const aiProv = row?.aiProvider?.trim().toLowerCase();
+  const aiProvider = aiProv === "gemini" ? "gemini" : "openai";
+  const kind = row?.localOpenAiKind?.trim();
+  const allowedKind = ["ollama", "lmstudio", "localai", "llamacpp", "custom"].includes(kind ?? "")
+    ? kind
+    : null;
+  res.json({
+    workspaceId: req.params.id,
+    aiProvider,
+    openaiModel: row?.openaiModel ?? "",
+    geminiModel: row?.geminiModel ?? "",
+    maxTokens: row?.maxTokens ?? null,
+    temperature: row?.temperature ?? null,
+    hasApiKeyOverride: Boolean(row?.openaiApiKey?.trim()),
+    hasGeminiApiKeyOverride: Boolean(row?.geminiApiKey?.trim()),
+    openaiCompatibleBaseUrl: row?.openaiCompatibleBaseUrl?.trim() ?? "",
+    localOpenAiKind: allowedKind,
+  });
+});
+
+workspacesRouter.patch("/workspaces/:id/ai-settings", async (req, res) => {
+  const parsed = patchWorkspaceAiSettingsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  const existing = await prisma.workspace.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ message: "Workspace not found" });
+
+  const {
+    aiProvider,
+    openaiModel,
+    geminiModel,
+    maxTokens,
+    temperature,
+    openaiApiKey,
+    geminiApiKey,
+    openaiCompatibleBaseUrl,
+    localOpenAiKind,
+  } = parsed.data;
+  const hasAnyField =
+    aiProvider !== undefined ||
+    openaiModel !== undefined ||
+    geminiModel !== undefined ||
+    maxTokens !== undefined ||
+    temperature !== undefined ||
+    openaiApiKey !== undefined ||
+    geminiApiKey !== undefined ||
+    openaiCompatibleBaseUrl !== undefined ||
+    localOpenAiKind !== undefined;
+  if (!hasAnyField) {
+    const row = await prisma.workspaceAiSettings.findUnique({
+      where: { workspaceId: req.params.id },
+    });
+    const ap = row?.aiProvider?.trim().toLowerCase() === "gemini" ? "gemini" : "openai";
+    const k0 = row?.localOpenAiKind?.trim();
+    const allowed0 = ["ollama", "lmstudio", "localai", "llamacpp", "custom"].includes(k0 ?? "")
+      ? k0
+      : null;
+    return res.json({
+      workspaceId: req.params.id,
+      aiProvider: ap,
+      openaiModel: row?.openaiModel ?? "",
+      geminiModel: row?.geminiModel ?? "",
+      maxTokens: row?.maxTokens ?? null,
+      temperature: row?.temperature ?? null,
+      hasApiKeyOverride: Boolean(row?.openaiApiKey?.trim()),
+      hasGeminiApiKeyOverride: Boolean(row?.geminiApiKey?.trim()),
+      openaiCompatibleBaseUrl: row?.openaiCompatibleBaseUrl?.trim() ?? "",
+      localOpenAiKind: allowed0,
+    });
+  }
+
+  const data: {
+    aiProvider?: string | null;
+    openaiModel?: string | null;
+    geminiModel?: string | null;
+    maxTokens?: number | null;
+    temperature?: number | null;
+    openaiApiKey?: string | null;
+    geminiApiKey?: string | null;
+    openaiCompatibleBaseUrl?: string | null;
+    localOpenAiKind?: string | null;
+  } = {};
+
+  if (aiProvider !== undefined) {
+    data.aiProvider = aiProvider;
+  }
+  if (openaiModel !== undefined) {
+    const t = openaiModel.trim();
+    data.openaiModel = t.length > 0 ? t : null;
+  }
+  if (geminiModel !== undefined) {
+    const t = geminiModel.trim();
+    data.geminiModel = t.length > 0 ? t : null;
+  }
+  if (maxTokens !== undefined) {
+    data.maxTokens = maxTokens;
+  }
+  if (temperature !== undefined) {
+    data.temperature = temperature;
+  }
+  if (openaiApiKey !== undefined) {
+    const t = openaiApiKey.trim();
+    data.openaiApiKey = t.length > 0 ? t : null;
+  }
+  if (geminiApiKey !== undefined) {
+    const t = geminiApiKey.trim();
+    data.geminiApiKey = t.length > 0 ? t : null;
+  }
+  if (openaiCompatibleBaseUrl !== undefined) {
+    const t = openaiCompatibleBaseUrl.trim();
+    data.openaiCompatibleBaseUrl = t.length > 0 ? t : null;
+  }
+  if (localOpenAiKind !== undefined) {
+    data.localOpenAiKind = localOpenAiKind;
+  }
+
+  const row = await prisma.workspaceAiSettings.upsert({
+    where: { workspaceId: req.params.id },
+    create: {
+      workspaceId: req.params.id,
+      aiProvider: data.aiProvider !== undefined ? data.aiProvider : null,
+      openaiModel: data.openaiModel !== undefined ? data.openaiModel : null,
+      geminiModel: data.geminiModel !== undefined ? data.geminiModel : null,
+      maxTokens: data.maxTokens !== undefined ? data.maxTokens : null,
+      temperature: data.temperature !== undefined ? data.temperature : null,
+      openaiApiKey: data.openaiApiKey !== undefined ? data.openaiApiKey : null,
+      geminiApiKey: data.geminiApiKey !== undefined ? data.geminiApiKey : null,
+      openaiCompatibleBaseUrl:
+        data.openaiCompatibleBaseUrl !== undefined ? data.openaiCompatibleBaseUrl : null,
+      localOpenAiKind: data.localOpenAiKind !== undefined ? data.localOpenAiKind : null,
+    },
+    update: {
+      ...(data.aiProvider !== undefined ? { aiProvider: data.aiProvider } : {}),
+      ...(data.openaiModel !== undefined ? { openaiModel: data.openaiModel } : {}),
+      ...(data.geminiModel !== undefined ? { geminiModel: data.geminiModel } : {}),
+      ...(data.maxTokens !== undefined ? { maxTokens: data.maxTokens } : {}),
+      ...(data.temperature !== undefined ? { temperature: data.temperature } : {}),
+      ...(data.openaiApiKey !== undefined ? { openaiApiKey: data.openaiApiKey } : {}),
+      ...(data.geminiApiKey !== undefined ? { geminiApiKey: data.geminiApiKey } : {}),
+      ...(data.openaiCompatibleBaseUrl !== undefined
+        ? { openaiCompatibleBaseUrl: data.openaiCompatibleBaseUrl }
+        : {}),
+      ...(data.localOpenAiKind !== undefined ? { localOpenAiKind: data.localOpenAiKind } : {}),
+    },
+  });
+
+  const apOut = row.aiProvider?.trim().toLowerCase() === "gemini" ? "gemini" : "openai";
+  const kOut = row.localOpenAiKind?.trim();
+  const allowedOut = ["ollama", "lmstudio", "localai", "llamacpp", "custom"].includes(kOut ?? "")
+    ? kOut
+    : null;
+  res.json({
+    workspaceId: req.params.id,
+    aiProvider: apOut,
+    openaiModel: row.openaiModel ?? "",
+    geminiModel: row.geminiModel ?? "",
+    maxTokens: row.maxTokens ?? null,
+    temperature: row.temperature ?? null,
+    hasApiKeyOverride: Boolean(row.openaiApiKey?.trim()),
+    hasGeminiApiKeyOverride: Boolean(row.geminiApiKey?.trim()),
+    openaiCompatibleBaseUrl: row.openaiCompatibleBaseUrl?.trim() ?? "",
+    localOpenAiKind: allowedOut,
+  });
 });
 
 workspacesRouter.patch("/workspaces/:id", async (req, res) => {
@@ -72,20 +247,27 @@ workspacesRouter.delete("/workspaces/:id", async (req, res) => {
   if (existing.slug === "default") {
     return res.status(400).json({ message: "The default workspace cannot be deleted." });
   }
-  const [roadmaps, initiatives, themes, teams, sponsors, imports] = await Promise.all([
+  const [roadmaps, initiatives, themes, phaseDefinitions, sponsors, imports] = await Promise.all([
     prisma.roadmap.count({ where: { workspaceId: req.params.id } }),
     prisma.initiative.count({ where: { workspaceId: req.params.id } }),
     prisma.strategicTheme.count({ where: { workspaceId: req.params.id } }),
-    prisma.team.count({ where: { workspaceId: req.params.id } }),
+    prisma.phaseDefinition.count({ where: { workspaceId: req.params.id } }),
     prisma.businessSponsor.count({ where: { workspaceId: req.params.id } }),
     prisma.importBatch.count({ where: { workspaceId: req.params.id } }),
   ]);
-  const total = roadmaps + initiatives + themes + teams + sponsors + imports;
+  const total = roadmaps + initiatives + themes + phaseDefinitions + sponsors + imports;
   if (total > 0) {
     return res.status(409).json({
       message:
-        "Workspace still has data (roadmaps, initiatives, themes, teams, sponsors, or imports). Remove or reassign them first.",
-      counts: { roadmaps, initiatives, themes, teams, sponsors, imports },
+        "Workspace still has data (roadmaps, initiatives, themes, phases, sponsors, or imports). Remove or reassign them first.",
+      counts: {
+        roadmaps,
+        initiatives,
+        themes,
+        phaseDefinitions,
+        sponsors,
+        imports,
+      },
     });
   }
   await prisma.workspace.delete({ where: { id: req.params.id } });

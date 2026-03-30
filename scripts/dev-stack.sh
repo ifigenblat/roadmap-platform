@@ -7,17 +7,25 @@
 #   ./scripts/dev-stack.sh stop --down # same + docker compose down (containers removed)
 #   ./scripts/dev-stack.sh restart     # stop then npm run dev (foreground)
 #   ./scripts/dev-stack.sh status      # docker ps + listeners on dev ports
-#   ./scripts/dev-stack.sh docker      # only: docker compose up -d postgres redis
+#   ./scripts/dev-stack.sh docker      # only: docker compose up (postgres+redis or redis if LOCAL_POSTGRES=1)
 #
 # Environment:
 #   DEV_STACK_FOREGROUND=0  # with `start`: only bring up Docker, print hint (no npm run dev)
+#   LOCAL_POSTGRES=1        # in root .env: skip Postgres container; use host Postgres (POSTGRES_PORT, URLs)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-PORTS=(3001 4000 4100 4200 4300 4400 4500)
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ROOT/.env"
+  set +a
+fi
+
+PORTS=(3000 3001 4010 4110 4210 4310 4410 4510 4610)
 
 require_docker() {
   if docker info >/dev/null 2>&1; then
@@ -38,11 +46,24 @@ free_node_ports() {
   bash "$ROOT/scripts/free-dev-ports.sh"
 }
 
+docker_db_services() {
+  if [[ "${LOCAL_POSTGRES:-0}" == "1" ]]; then
+    echo "redis"
+  else
+    echo "postgres redis"
+  fi
+}
+
 cmd_start() {
   require_docker
-  echo "==> Docker: postgres + redis"
-  docker compose up -d postgres redis
-  docker compose ps postgres redis
+  if [[ "${LOCAL_POSTGRES:-0}" == "1" ]]; then
+    echo "==> Docker: redis only (LOCAL_POSTGRES=1 — Postgres on host port ${POSTGRES_PORT:-5432})"
+  else
+    echo "==> Docker: postgres + redis"
+  fi
+  # shellcheck disable=SC2046
+  docker compose up -d $(docker_db_services)
+  docker compose ps
 
   if [[ "${DEV_STACK_FOREGROUND:-1}" == "0" ]]; then
     echo ""
@@ -94,7 +115,7 @@ cmd_status() {
     fi
   done
   echo ""
-  echo "==> Postgres host port (from compose)"
+  echo "==> Postgres host port (.env POSTGRES_PORT)"
   pg="${POSTGRES_PORT:-5433}"
   line=$(lsof -nP -iTCP:"$pg" -sTCP:LISTEN 2>/dev/null | tail -n +2 || true)
   if [[ -n "$line" ]]; then
@@ -106,15 +127,20 @@ cmd_status() {
 
 cmd_docker() {
   require_docker
-  docker compose up -d postgres redis
-  docker compose ps postgres redis
-  echo "Postgres: localhost:${POSTGRES_PORT:-5433}  Redis: localhost:6379"
+  # shellcheck disable=SC2046
+  docker compose up -d $(docker_db_services)
+  docker compose ps
+  if [[ "${LOCAL_POSTGRES:-0}" == "1" ]]; then
+    echo "Postgres: localhost:${POSTGRES_PORT:-5432} (local)  Redis: localhost:6379"
+  else
+    echo "Postgres: localhost:${POSTGRES_PORT:-5433}  Redis: localhost:6379"
+  fi
 }
 
 usage() {
   cat <<'EOF'
 Commands:
-  start       Start postgres + redis, then run npm run dev (foreground).
+  start       Start postgres + redis (or redis only if LOCAL_POSTGRES=1 in .env), then npm run dev.
               Set DEV_STACK_FOREGROUND=0 to only start Docker and exit.
   stop        Kill Node dev ports + docker compose stop.
   stop --down Same, then docker compose down (containers removed).

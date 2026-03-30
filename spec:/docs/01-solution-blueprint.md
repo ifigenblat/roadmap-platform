@@ -61,7 +61,10 @@ A roadmap-specific expression of an initiative on a timeline.
 This supports the same initiative appearing on multiple roadmaps or planning cycles.
 
 ### PhaseSegment
-A time-bounded segment of a roadmap item such as Planning, Discovery, Implementation, Launch.
+A time-bounded segment of a roadmap item such as Planning, Discovery, Implementation, Launch. Segments may reference a workspace **`PhaseDefinition`** for consistent naming and imports.
+
+### PhaseDefinition
+Workspace-scoped catalog of phase names (with sort order) used when creating or importing phase segments.
 
 ### Team
 Delivery or functional team metadata.
@@ -74,24 +77,20 @@ Binding between internal objects and external systems such as Jira or Confluence
 
 ## 5. Product shape
 
-### Primary screens
-- Portfolio dashboard
-- Roadmap list
-- Roadmap workspace
-- Initiative detail
-- Strategic themes management
-- Template builder
-- Import center
-- Integrations center
-- Admin / workspace settings
+### Primary screens (as implemented in the web app)
+- Dashboard (`/`)
+- Roadmap list and **roadmap workspace** (`/roadmaps`, `/roadmaps/[id]` with grid, timeline, and executive views)
+- Initiatives list and detail
+- **Global themes** (`/themes`, `/themes/[id]`) with color tokens
+- **Workspace phase labels** (`/phases`) for dropdowns and segment linkage
+- Teams, **business sponsors**, imports, templates
+- Settings (workspaces, integrations, AI-related options as wired)
 
 ### Primary views inside a roadmap
-- timeline / gantt-like roadmap
-- initiative table
-- kanban or status board
-- strategic theme grouping
-- dependency map
-- executive summary
+- **Grid** (initiative / item table with phase and theme context)
+- **Timeline** (lane-based timeline with search and theme coloring)
+- **Executive** summary (aggregated narrative-oriented view)
+- Future / partial: kanban, dependency map, richer collaboration — see `00-implementation-status.md`
 
 ## 6. Recommended architecture principle
 

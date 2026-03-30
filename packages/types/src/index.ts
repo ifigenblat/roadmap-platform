@@ -25,10 +25,59 @@ export const patchWorkspaceSchema = z.object({
     .optional(),
 });
 
+export const aiWorkspaceProviderSchema = z.enum(["openai", "gemini"]);
+
+export const localOpenAiKindSchema = z.enum(["ollama", "lmstudio", "localai", "llamacpp", "custom"]);
+
+/** Public GET /workspaces/:id/ai-settings — safe for browser */
+export const workspaceAiSettingsPublicSchema = z.object({
+  workspaceId: z.string(),
+  aiProvider: aiWorkspaceProviderSchema,
+  openaiModel: z.string(),
+  geminiModel: z.string(),
+  maxTokens: z.number().int().nullable(),
+  temperature: z.number().nullable(),
+  hasApiKeyOverride: z.boolean(),
+  hasGeminiApiKeyOverride: z.boolean(),
+  openaiCompatibleBaseUrl: z.string(),
+  localOpenAiKind: localOpenAiKindSchema.nullable(),
+});
+
+/** PATCH /workspaces/:id/ai-settings */
+export const patchWorkspaceAiSettingsSchema = z.object({
+  aiProvider: aiWorkspaceProviderSchema.optional(),
+  /** Empty string clears override (use env / default). */
+  openaiModel: z.string().max(200).optional(),
+  geminiModel: z.string().max(200).optional(),
+  maxTokens: z.union([z.number().int().min(1).max(128000), z.null()]).optional(),
+  temperature: z.union([z.number().min(0).max(2), z.null()]).optional(),
+  /** Empty string removes stored key; omit to leave unchanged. */
+  openaiApiKey: z.string().max(2048).optional(),
+  geminiApiKey: z.string().max(2048).optional(),
+  /** e.g. http://127.0.0.1:11434/v1 — empty string clears (use hosted OpenAI only). */
+  openaiCompatibleBaseUrl: z.string().max(500).optional(),
+  /** Which local stack (for UI / docs only). */
+  localOpenAiKind: localOpenAiKindSchema.nullable().optional(),
+});
+
+/** Injected by gateway (never send from browser directly). */
+export const aiRuntimeSchema = z.object({
+  provider: aiWorkspaceProviderSchema.optional(),
+  model: z.string().optional(),
+  geminiModel: z.string().optional(),
+  maxTokens: z.number().int().min(1).max(128000).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  /** OpenAI-compatible HTTP API (Ollama, LM Studio, etc.) */
+  openaiCompatibleBaseUrl: z.string().optional(),
+  localOpenAiKind: z.string().optional(),
+});
+
 export const roadmapStatusSchema = z.enum(["draft", "active", "archived"]);
 export const itemStatusSchema = z.enum(["not_started", "in_progress", "at_risk", "done"]);
 export const prioritySchema = z.enum(["low", "medium", "high", "critical"]);
-export const providerSchema = z.enum(["jira", "confluence", "azure_devops", "manual"]);
+export const providerSchema = z.enum(["jira", "confluence", "cursor", "azure_devops", "manual"]);
 
 export const roadmapSchema = z.object({
   id: z.string(),
@@ -69,7 +118,6 @@ export const strategicThemeSchema = z.object({
 
 export const teamSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
   name: z.string().min(1),
   kind: z.string().nullable().optional(),
   active: z.boolean().optional()
@@ -103,10 +151,36 @@ export const roadmapItemSchema = z.object({
   sortOrder: z.number().int().default(0)
 });
 
+export const phaseDefinitionSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  name: z.string(),
+  sortOrder: z.number().int().default(0),
+});
+
+export const createPhaseDefinitionSchema = z.object({
+  name: z.string().min(1),
+  sortOrder: z.number().int().optional(),
+  workspaceId: z.string().optional(),
+});
+
+export const patchPhaseDefinitionSchema = z.object({
+  name: z.string().min(1).optional(),
+  sortOrder: z.number().int().optional(),
+});
+
 export const phaseSegmentSchema = z.object({
   id: z.string(),
   roadmapItemId: z.string(),
   phaseName: z.string(),
+  phaseDefinitionId: z.string().nullable().optional(),
+  phaseDefinition: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+    })
+    .nullable()
+    .optional(),
   startDate: z.string(),
   endDate: z.string(),
   capacityAllocationEstimate: z.number().nullable().optional(),
@@ -127,7 +201,7 @@ export const createRoadmapSchema = createRoadmapFieldsSchema.refine(
 );
 export const createInitiativeSchema = initiativeSchema.omit({ id: true });
 export const createStrategicThemeSchema = strategicThemeSchema.omit({ id: true });
-export const createTeamSchema = teamSchema.omit({ id: true, workspaceId: true });
+export const createTeamSchema = teamSchema.omit({ id: true });
 export const createBusinessSponsorSchema = businessSponsorSchema.omit({
   id: true,
   workspaceId: true
@@ -173,20 +247,35 @@ export const moveRoadmapItemSchema = z
     { message: "Provide sortOrder, roadmapId, and/or laneKey" }
   );
 
-const createPhaseSegmentBodyFieldsSchema = phaseSegmentSchema.omit({
-  id: true,
-  roadmapItemId: true,
+const createPhaseSegmentBodyFieldsSchema = z.object({
+  phaseDefinitionId: z.string().min(1).optional(),
+  phaseName: z.string().min(1).optional(),
+  startDate: z.string(),
+  endDate: z.string(),
+  capacityAllocationEstimate: z.number().nullable().optional(),
+  sprintEstimate: z.number().nullable().optional(),
+  teamSummary: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  jiraKey: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
-export const createPhaseSegmentBodySchema = createPhaseSegmentBodyFieldsSchema.refine(
-  (d) => new Date(d.endDate) >= new Date(d.startDate),
-  {
+
+export const createPhaseSegmentBodySchema = createPhaseSegmentBodyFieldsSchema
+  .refine((d) => !!(d.phaseDefinitionId?.trim()) || !!(d.phaseName?.trim()), {
+    message: "Select a workspace phase or provide a phase name.",
+    path: ["phaseDefinitionId"],
+  })
+  .refine((d) => new Date(d.endDate) >= new Date(d.startDate), {
     message: "endDate must be on or after startDate",
     path: ["endDate"],
-  }
-);
+  });
 
 /** PATCH /phase-segments/:id */
-export const patchPhaseSegmentSchema = createPhaseSegmentBodyFieldsSchema.partial();
+export const patchPhaseSegmentSchema = createPhaseSegmentBodyFieldsSchema
+  .extend({
+    phaseDefinitionId: z.union([z.string().min(1), z.null()]).optional(),
+  })
+  .partial();
 
 /** PUT /roadmap-items/:id/teams — replace team assignments */
 export const replaceRoadmapItemTeamsSchema = z.object({
@@ -218,13 +307,33 @@ export const createRoadmapFromTemplateSchema = z.object({
   ownerUserId: z.string().nullable().optional(),
 });
 
+/**
+ * Jira Cloud: https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/
+ * Auth: Basic with account email + API token (https://id.atlassian.com/manage-profile/security/api-tokens)
+ */
+export const jiraCloudConnectionConfigSchema = z.object({
+  /** Site base URL, e.g. https://your-domain.atlassian.net (no trailing slash) */
+  siteUrl: z.string().url(),
+  email: z.string().email(),
+  apiToken: z.string().min(1),
+});
+
 export const jiraConnectSchema = z.object({
   connectionName: z.string().min(1),
-  /** Opaque config; stored as JSON string server-side (encrypt in production). */
+  config: jiraCloudConnectionConfigSchema,
+});
+
+/** Opaque config until Confluence shape is defined. */
+export const confluenceConnectSchema = z.object({
+  connectionName: z.string().min(1),
   config: z.record(z.unknown()),
 });
 
-export const confluenceConnectSchema = jiraConnectSchema;
+/** Cursor team / Cloud Agents API — store apiKey in config. See https://cursor.com/docs/api */
+export const cursorConnectSchema = z.object({
+  connectionName: z.string().min(1),
+  config: z.record(z.unknown()),
+});
 
 export const aiGenerateObjectiveSchema = z.object({
   initiativeName: z.string().min(1),
@@ -292,6 +401,7 @@ export const aiExecutiveSummaryBundleSchema = z.object({
 
 export const aiExecutiveSummarySchema = z.object({
   bundle: aiExecutiveSummaryBundleSchema,
+  _aiRuntime: aiRuntimeSchema.optional(),
 });
 
 export type Workspace = z.infer<typeof workspaceSchema>;
@@ -302,7 +412,11 @@ export type Team = z.infer<typeof teamSchema>;
 export type BusinessSponsor = z.infer<typeof businessSponsorSchema>;
 export type RoadmapItem = z.infer<typeof roadmapItemSchema>;
 export type PhaseSegment = z.infer<typeof phaseSegmentSchema>;
+export type PhaseDefinition = z.infer<typeof phaseDefinitionSchema>;
 export type CreateRoadmapInput = z.infer<typeof createRoadmapSchema>;
 export type CreateInitiativeInput = z.infer<typeof createInitiativeSchema>;
 export type CreateStrategicThemeInput = z.infer<typeof createStrategicThemeSchema>;
 export type CreateRoadmapItemInput = z.infer<typeof createRoadmapItemSchema>;
+export type JiraCloudConnectionConfig = z.infer<
+  typeof jiraCloudConnectionConfigSchema
+>;

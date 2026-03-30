@@ -3,7 +3,7 @@
 # Run from repo root when you see EADDRINUSE or 502 after starting dev twice.
 
 set -euo pipefail
-PORTS=(3001 4000 4100 4200 4300 4400 4500)
+PORTS=(3000 3001 3010 4010 4110 4210 4310 4410 4510 4610)
 
 echo "Stopping listeners on: ${PORTS[*]}"
 for p in "${PORTS[@]}"; do

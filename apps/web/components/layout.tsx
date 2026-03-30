@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useCallback, useMemo, useState } from "react";
+import { ReactNode, Suspense, useCallback, useMemo, useState } from "react";
+import { WorkspaceHeaderBadge } from "./workspace-header-badge";
 
 function IconDashboard() {
   return (
@@ -44,6 +45,14 @@ function IconTeams() {
       <circle cx="9" cy="8" r="3" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M3 20v-1a5 5 0 0 1 5-5h2M21 20v-1a4 4 0 0 0-4-4h-1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconPhases() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+      <path d="M4 7h10M4 12h16M4 17h7" strokeLinecap="round" />
     </svg>
   );
 }
@@ -111,6 +120,7 @@ const nav = [
   { label: "Initiatives", href: "/initiatives", Icon: IconInitiatives },
   { label: "Themes", href: "/themes", Icon: IconThemes },
   { label: "Teams", href: "/teams", Icon: IconTeams },
+  { label: "Phases", href: "/phases", Icon: IconPhases },
   { label: "Business sponsors", href: "/sponsors", Icon: IconSponsors },
   { label: "Imports", href: "/imports", Icon: IconImports },
   { label: "Templates", href: "/templates", Icon: IconTemplates },
@@ -203,7 +213,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="text-xs uppercase tracking-widest text-slate-400">Portfolio planning</div>
             <div className="truncate text-lg font-semibold">Executive roadmap workspace</div>
           </div>
-          <div className="hidden shrink-0 rounded-full bg-indigo-600 px-3 py-1 text-sm sm:block">Workspace: Default</div>
+          <Suspense
+            fallback={
+              <div className="hidden max-w-[min(18rem,50vw)] shrink-0 truncate rounded-full bg-indigo-600 px-3 py-1 text-sm text-white sm:block">
+                Workspace: …
+              </div>
+            }
+          >
+            <WorkspaceHeaderBadge />
+          </Suspense>
         </header>
         <div className="p-4 md:p-6">{children}</div>
       </main>

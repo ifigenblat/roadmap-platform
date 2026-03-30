@@ -8,7 +8,13 @@ type ExecApi = {
   roadmap: { id: string; name: string; planningYear: number; status: string };
   generatedAt: string;
   themes: Array<{
-    strategicTheme: { id: string; name: string; objective: string | null; orderIndex: number };
+    strategicTheme: {
+      id: string;
+      name: string;
+      objective: string | null;
+      orderIndex: number;
+      colorToken?: string | null;
+    };
     initiatives: Array<{
       initiativeId: string;
       canonicalName: string;

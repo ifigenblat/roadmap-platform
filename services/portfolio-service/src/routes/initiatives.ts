@@ -24,7 +24,12 @@ initiativesRouter.get("/initiatives", async (req, res) => {
         sponsor: true,
         themes: {
           include: {
-            strategicTheme: { select: { id: true, name: true } },
+            strategicTheme: { select: { id: true, name: true, colorToken: true } },
+          },
+        },
+        roadmapItems: {
+          select: {
+            roadmap: { select: { id: true, name: true, planningYear: true } },
           },
         },
       },
@@ -57,7 +62,12 @@ initiativesRouter.get("/initiatives/:id", async (req, res) => {
     include: {
       sponsor: true,
       themes: { include: { strategicTheme: true } },
-      roadmapItems: { include: { roadmap: true, phases: true } },
+      roadmapItems: {
+        include: {
+          roadmap: true,
+          phases: { include: { phaseDefinition: { select: { id: true, name: true } } } },
+        },
+      },
     },
   });
   if (!row) return res.status(404).json({ message: "Not found" });
@@ -89,7 +99,7 @@ initiativesRouter.put("/initiatives/:id/theme-links", async (req, res) => {
   const full = await prisma.initiative.findUnique({
     where: { id },
     include: {
-      themes: { include: { strategicTheme: { select: { id: true, name: true } } } },
+      themes: { include: { strategicTheme: { select: { id: true, name: true, colorToken: true } } } },
     },
   });
   res.json(full);

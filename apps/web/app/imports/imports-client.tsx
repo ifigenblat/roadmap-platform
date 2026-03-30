@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { FormModal, ModalActions, modalFieldClass } from "../../components/form-modal";
-import { PageToolbar } from "../../components/page-toolbar";
-import { API_BASE, fetchJson } from "../../lib/api";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { FormModal, ModalActions } from "../../components/form-modal";
+import { WorkspaceSelectField } from "../../components/workspace-select-field";
+import { API_BASE, fetchJson, sendJson } from "../../lib/api";
 import { ToastViewport, useToasts } from "../../lib/toast";
 
 type ImportBatchRow = {
@@ -17,6 +18,25 @@ type ImportBatchRow = {
   roadmap?: { id: string; name: string; status: string } | null;
   _count?: { rowResults: number };
   summaryJson?: Record<string, unknown> | null;
+};
+
+type DeleteImpact = {
+  importBatchId: string;
+  sourceFileName: string;
+  totalRecords: number;
+  breakdown: {
+    importRowResults: number;
+    importBatches: number;
+    roadmaps: number;
+    roadmapItems: number;
+    phaseSegments: number;
+    roadmapItemTeams: number;
+    teamsOrphanImported: number;
+    strategicThemes: number;
+    initiativeThemeViaRoadmapThemes: number;
+    initiativeThemeViaOrphanInitiatives: number;
+    initiativesOrphan: number;
+  };
 };
 
 type ImportErrors = {
@@ -32,17 +52,45 @@ type ImportErrors = {
   }>;
 };
 
-export function ImportsClient({ initial }: { initial: ImportBatchRow[] }) {
+type WorkspaceOption = { id: string; name: string; slug: string };
+
+export function ImportsClient({
+  initial,
+  roadmaps,
+  workspaces,
+}: {
+  initial: ImportBatchRow[];
+  roadmaps: { id: string; name: string }[];
+  workspaces: WorkspaceOption[];
+}) {
+  const router = useRouter();
   const [rows, setRows] = useState(initial);
+  const [roadmapOptions, setRoadmapOptions] = useState(roadmaps);
   const [workspaceId, setWorkspaceId] = useState("");
+  const [importInto, setImportInto] = useState<"existing" | "new">("existing");
+  const [roadmapId, setRoadmapId] = useState("");
+  const [roadmapName, setRoadmapName] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedErrorsFor, setSelectedErrorsFor] = useState<string | null>(null);
   const [errorsById, setErrorsById] = useState<Record<string, ImportErrors>>({});
   const [errorSheetFilter, setErrorSheetFilter] = useState<string>("__all__");
   const [errorQuery, setErrorQuery] = useState("");
   const [listSearchQuery, setListSearchQuery] = useState("");
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [removeForId, setRemoveForId] = useState<string | null>(null);
+  const [removeImpact, setRemoveImpact] = useState<DeleteImpact | null>(null);
+  const [removeImpactLoading, setRemoveImpactLoading] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const { toasts, push, dismiss } = useToasts();
+
+  useEffect(() => {
+    setRoadmapOptions(roadmaps);
+  }, [roadmaps]);
+
+  useEffect(() => {
+    if (roadmapId && !roadmapOptions.some((r) => r.id === roadmapId)) {
+      setRoadmapId("");
+    }
+  }, [roadmapOptions, roadmapId]);
 
   const filteredListRows = useMemo(() => {
     const q = listSearchQuery.trim().toLowerCase();
@@ -115,25 +163,123 @@ export function ImportsClient({ initial }: { initial: ImportBatchRow[] }) {
       push("Please select an .xlsx file.", "error");
       return;
     }
+    if (importInto === "existing") {
+      if (!roadmapId.trim()) {
+        push("Select an existing roadmap to import into, or choose “Create new roadmap”.", "error");
+        return;
+      }
+    } else if (!roadmapName.trim()) {
+      push("Enter a name for the new roadmap (or pick an existing roadmap).", "error");
+      return;
+    }
     setBusy(true);
     try {
       const payload = new FormData();
       payload.append("file", file);
       if (workspaceId.trim()) payload.append("workspaceId", workspaceId.trim());
+      if (importInto === "existing") {
+        payload.append("roadmapId", roadmapId.trim());
+      } else {
+        payload.append("roadmapName", roadmapName.trim());
+      }
       const res = await fetch(`${API_BASE}/api/imports/workbook`, {
         method: "POST",
         body: payload,
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.message || `HTTP ${res.status}`);
-      push(`Upload accepted: ${body.importId}`);
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: string;
+        importId?: string;
+        status?: string;
+        imported?: number;
+        failed?: number;
+        skipped?: number;
+      };
+      if (!res.ok) {
+        const detail = [body.message, body.error].filter(Boolean).join(" — ");
+        push(`Upload failed: ${detail || `HTTP ${res.status}`}`, "error");
+        return;
+      }
+      if (body.status === "failed" && body.error) {
+        push(`Import failed: ${body.error}`, "error");
+      } else {
+        const parts = [`Import ${body.importId ?? "done"}`];
+        if (typeof body.imported === "number") parts.push(`${body.imported} imported`);
+        if (typeof body.skipped === "number" && body.skipped > 0) parts.push(`${body.skipped} skipped`);
+        if (typeof body.failed === "number" && body.failed > 0) parts.push(`${body.failed} row errors`);
+        push(parts.join(" · "));
+      }
       form.reset();
-      setUploadOpen(false);
       await refresh();
+      await router.refresh();
     } catch (err) {
       push(`Upload failed: ${String(err)}`, "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function onWorkbookFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f || importInto !== "new") return;
+    if (roadmapName.trim()) return;
+    const base = f.name.replace(/\.xlsx$/i, "").replace(/_/g, " ").trim();
+    if (base) setRoadmapName(base);
+  }
+
+  function impactSummaryLines(b: DeleteImpact["breakdown"]): string[] {
+    const lines: string[] = [];
+    const add = (n: number, label: string) => {
+      if (n > 0) lines.push(`${n} ${label}`);
+    };
+    add(b.importRowResults, "import log row(s)");
+    add(b.importBatches, "import batch record(s)");
+    add(b.roadmaps, "roadmap(s) (full roadmap removed when linked)");
+    add(b.roadmapItems, "roadmap item row(s)");
+    add(b.phaseSegments, "phase segment(s)");
+    add(b.roadmapItemTeams, "item–team link(s)");
+    add(b.teamsOrphanImported, "imported-only team(s)");
+    add(b.strategicThemes, "roadmap-scoped theme(s)");
+    add(b.initiativeThemeViaRoadmapThemes, "initiative–theme link(s) via those themes");
+    add(b.initiativeThemeViaOrphanInitiatives, "other initiative–theme link(s) for removed initiatives");
+    add(b.initiativesOrphan, "initiative(s) removed (only appeared on this roadmap)");
+    return lines;
+  }
+
+  async function openRemoveImport(importId: string) {
+    setRemoveForId(importId);
+    setRemoveImpact(null);
+    setRemoveImpactLoading(true);
+    try {
+      const impact = await fetchJson<DeleteImpact>(`/api/imports/${importId}/delete-impact`);
+      setRemoveImpact(impact);
+    } catch (err) {
+      push(`Could not load delete preview: ${String(err)}`, "error");
+      setRemoveForId(null);
+    } finally {
+      setRemoveImpactLoading(false);
+    }
+  }
+
+  function closeRemoveImport() {
+    if (removeBusy) return;
+    setRemoveForId(null);
+    setRemoveImpact(null);
+  }
+
+  async function confirmRemoveImport() {
+    if (!removeForId) return;
+    setRemoveBusy(true);
+    try {
+      await sendJson(`/api/imports/${removeForId}`, "DELETE");
+      push("Import removed and linked data deleted.");
+      closeRemoveImport();
+      await refresh();
+      await router.refresh();
+    } catch (err) {
+      push(`Remove failed: ${String(err)}`, "error");
+    } finally {
+      setRemoveBusy(false);
     }
   }
 
@@ -154,20 +300,81 @@ export function ImportsClient({ initial }: { initial: ImportBatchRow[] }) {
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
 
       <form onSubmit={onUpload} className="mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+        <p className="mb-3 text-sm text-slate-400">
+          The API requires a target roadmap: either an existing one or a new name (draft roadmap is created).
+        </p>
+        <div className="mb-3 flex flex-wrap gap-4 text-sm">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="importInto"
+              checked={importInto === "existing"}
+              onChange={() => setImportInto("existing")}
+            />
+            <span>Existing roadmap</span>
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="importInto"
+              checked={importInto === "new"}
+              onChange={() => setImportInto("new")}
+            />
+            <span>Create new roadmap</span>
+          </label>
+        </div>
+        {importInto === "existing" ? (
+          <label className="mb-3 flex flex-col gap-1 text-sm">
+            <span className="text-slate-400">Roadmap</span>
+            <select
+              className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+              value={roadmapId}
+              onChange={(e) => setRoadmapId(e.target.value)}
+              required={importInto === "existing"}
+            >
+              <option value="">Select roadmap…</option>
+              {roadmapOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            {roadmapOptions.length === 0 && (
+              <span className="text-xs text-amber-200/90">
+                No roadmaps loaded. Create one under Roadmaps first, or use “Create new roadmap”.
+              </span>
+            )}
+          </label>
+        ) : (
+          <label className="mb-3 flex flex-col gap-1 text-sm">
+            <span className="text-slate-400">New roadmap name</span>
+            <input
+              className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+              placeholder="e.g. 2026 CET Sales & Marketing"
+              value={roadmapName}
+              onChange={(e) => setRoadmapName(e.target.value)}
+            />
+          </label>
+        )}
+        <div className="grid gap-3 md:grid-cols-[1fr_minmax(12rem,1fr)_auto]">
           <input
             name="workbook"
             type="file"
             accept=".xlsx"
             className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
             required
+            onChange={onWorkbookFileChange}
           />
-          <input
-            className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
-            placeholder="Workspace ID (optional)"
-            value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
-          />
+          <div className="min-w-0 self-end">
+            <WorkspaceSelectField
+              label="Workspace (optional)"
+              value={workspaceId}
+              onChange={setWorkspaceId}
+              workspaces={workspaces}
+              optional
+              disabled={busy}
+            />
+          </div>
           <button
             disabled={busy}
             className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
@@ -223,13 +430,22 @@ export function ImportsClient({ initial }: { initial: ImportBatchRow[] }) {
                 </td>
                 <td>{r._count?.rowResults ?? "—"}</td>
                 <td className="pr-4">
-                  <button
-                    type="button"
-                    className="rounded-md border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
-                    onClick={() => onViewErrors(r.id)}
-                  >
-                    View errors
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+                      onClick={() => onViewErrors(r.id)}
+                    >
+                      View errors
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-rose-900/60 px-2 py-1 text-xs text-rose-200 hover:bg-rose-950/40"
+                      onClick={() => openRemoveImport(r.id)}
+                    >
+                      Remove…
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -243,6 +459,61 @@ export function ImportsClient({ initial }: { initial: ImportBatchRow[] }) {
           </tbody>
         </table>
       </div>
+
+      <FormModal
+        open={!!removeForId}
+        onClose={closeRemoveImport}
+        title="Remove import"
+        subtitle={removeImpact?.sourceFileName ?? removeForId ?? ""}
+        maxWidthClass="max-w-lg"
+      >
+        <div className="mt-4 space-y-4 text-sm text-slate-300">
+          {removeImpactLoading && <p className="text-slate-400">Loading what will be deleted…</p>}
+          {!removeImpactLoading && removeImpact && (
+            <>
+              <p>
+                About <span className="font-semibold text-slate-100">{removeImpact.totalRecords}</span>{" "}
+                database record(s) will be removed (counts may overlap conceptually; the operation runs in
+                one transaction).
+              </p>
+              {removeImpact.breakdown.roadmaps > 0 && (
+                <div className="rounded-lg border border-amber-800/60 bg-amber-950/25 px-3 py-2 text-amber-100/95">
+                  <strong className="font-medium">Roadmap scope:</strong> the linked roadmap is deleted
+                  entirely, including all grid rows on it. If you imported into a roadmap that already had
+                  other work, that work is removed too. Prefer a dedicated roadmap per import when you
+                  need a clean undo.
+                </div>
+              )}
+              <ul className="list-inside list-disc space-y-1 text-slate-400">
+                {impactSummaryLines(removeImpact.breakdown).map((line, i) => (
+                  <li key={`${i}-${line}`}>{line}</li>
+                ))}
+              </ul>
+              {impactSummaryLines(removeImpact.breakdown).length === 0 && (
+                <p className="text-slate-400">Only the import batch and its log rows (no roadmap yet).</p>
+              )}
+            </>
+          )}
+          <ModalActions>
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              disabled={removeBusy || removeImpactLoading}
+              onClick={closeRemoveImport}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-rose-700 px-3 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50"
+              disabled={removeBusy || removeImpactLoading || !removeImpact}
+              onClick={() => void confirmRemoveImport()}
+            >
+              {removeBusy ? "Removing…" : "Remove import and data"}
+            </button>
+          </ModalActions>
+        </div>
+      </FormModal>
 
       <FormModal
         open={!!selectedErrorsFor}

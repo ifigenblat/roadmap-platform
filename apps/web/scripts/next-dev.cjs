@@ -7,7 +7,10 @@
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
-const nextBin = path.join(__dirname, "..", "node_modules", "next", "dist", "bin", "next");
+const appRoot = path.join(__dirname, "..");
+/** Hoisted workspaces install `next` at repo root; resolve from the app package. */
+const nextPkgJson = require.resolve("next/package.json", { paths: [appRoot] });
+const nextBin = path.join(path.dirname(nextPkgJson), "dist", "bin", "next");
 process.env.PORT = "3001";
 if (process.env.WATCHPACK_POLLING == null || process.env.WATCHPACK_POLLING === "") {
   process.env.WATCHPACK_POLLING = "true";
@@ -28,7 +31,7 @@ for (let i = 0; i < raw.length; i++) {
 const child = spawn(process.execPath, [nextBin, "dev", "-p", "3001", ...filtered], {
   stdio: "inherit",
   env: process.env,
-  cwd: path.join(__dirname, ".."),
+  cwd: appRoot,
 });
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);

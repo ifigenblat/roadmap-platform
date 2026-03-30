@@ -22,13 +22,13 @@ async function main() {
     create: { name: "Default Workspace", slug: "default" }
   });
 
-  const tplBase = process.env.TEMPLATE_SERVICE_URL || "http://localhost:4200";
+  const tplBase = process.env.TEMPLATE_SERVICE_URL || "http://localhost:4210";
   const tplRes = await fetch(`${tplBase}/templates`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       workspaceId: workspace.id,
-      name: "Standard Product Roadmap",
+      name: "Roadmap Platform — Standard",
       description: "Quarterly planning template",
     }),
   });
@@ -43,8 +43,8 @@ async function main() {
     data: {
       workspaceId: workspace.id,
       templateId: template.id,
-      name: "2026 Product Roadmap",
-      slug: "2026-product-roadmap",
+      name: "2026 Roadmap Platform",
+      slug: "2026-roadmap-platform",
       description: "Imported starter roadmap",
       planningYear: 2026,
       startDate: new Date("2026-01-01"),
@@ -94,12 +94,40 @@ async function main() {
     }
   });
 
+  const discovery = await prisma.phaseDefinition.create({
+    data: { workspaceId: workspace.id, name: "Discovery", sortOrder: 1 },
+  });
+  const build = await prisma.phaseDefinition.create({
+    data: { workspaceId: workspace.id, name: "Build", sortOrder: 2 },
+  });
+  const launch = await prisma.phaseDefinition.create({
+    data: { workspaceId: workspace.id, name: "Launch", sortOrder: 3 },
+  });
+
   await prisma.phaseSegment.createMany({
     data: [
-      { roadmapItemId: item.id, phaseName: "Discovery", startDate: new Date("2026-01-15"), endDate: new Date("2026-03-01") },
-      { roadmapItemId: item.id, phaseName: "Build", startDate: new Date("2026-03-02"), endDate: new Date("2026-06-15") },
-      { roadmapItemId: item.id, phaseName: "Launch", startDate: new Date("2026-06-16"), endDate: new Date("2026-08-30") }
-    ]
+      {
+        roadmapItemId: item.id,
+        phaseDefinitionId: discovery.id,
+        phaseName: discovery.name,
+        startDate: new Date("2026-01-15"),
+        endDate: new Date("2026-03-01"),
+      },
+      {
+        roadmapItemId: item.id,
+        phaseDefinitionId: build.id,
+        phaseName: build.name,
+        startDate: new Date("2026-03-02"),
+        endDate: new Date("2026-06-15"),
+      },
+      {
+        roadmapItemId: item.id,
+        phaseDefinitionId: launch.id,
+        phaseName: launch.name,
+        startDate: new Date("2026-06-16"),
+        endDate: new Date("2026-08-30"),
+      },
+    ],
   });
 }
 

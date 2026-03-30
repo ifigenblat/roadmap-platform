@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
-import { sendJson } from "../../../lib/api";
+import { useMemo, useState } from "react";
+import { DatePickerField } from "../../../components/date-picker-field";
+import { MultiSelectDropdown } from "../../../components/multi-select-dropdown";
+import { themeColorHex, themeInitiativeHeaderAccentClass } from "../../../lib/strategic-theme-color";
 import { ToastViewport, useToasts } from "../../../lib/toast";
-import {
-  INITIATIVE_TYPE_OPTIONS,
-  ITEM_STATUS_VALUES,
-  PHASE_STATUS_OPTIONS,
-  mergeOptionList,
-} from "./grid-dropdowns";
+import { GridRowEditModal, type GridRowEditShape } from "./grid-row-edit-modal";
 
 type RoadmapItem = {
   id: string;
@@ -26,11 +23,13 @@ type RoadmapItem = {
     notes?: string | null;
     sourceSystem?: string | null;
     sourceReference?: string | null;
-    themes?: Array<{ strategicTheme: { id: string; name: string } }>;
+    themes?: Array<{ strategicTheme: { id: string; name: string; colorToken?: string | null } }>;
   };
   phases: Array<{
     id: string;
     phaseName: string;
+    phaseDefinitionId?: string | null;
+    phaseDefinition?: { id: string; name: string } | null;
     capacityAllocationEstimate?: number | null;
     sprintEstimate?: number | null;
     startDate: string;
@@ -42,7 +41,7 @@ type RoadmapItem = {
   teams: Array<{ team: { id: string; name: string } }>;
 };
 
-type ThemeOption = { id: string; name: string };
+type ThemeOption = { id: string; name: string; colorToken?: string | null };
 type TeamOption = { id: string; name: string };
 
 type GridRow = {
@@ -54,6 +53,7 @@ type GridRow = {
   teamIds: string[];
   teamsLabel: string;
   phase: string;
+  phaseDefinitionId: string | null;
   capacityFraction: number | null;
   sprintNum: number | null;
   startDate: string;
@@ -66,6 +66,7 @@ type GridRow = {
   themeLabel: string;
   businessObjective: string;
   initiativeNotes: string;
+  firstThemeColorToken: string | null;
 };
 
 const ITEM_STATUS_LABEL: Record<string, string> = {
@@ -102,6 +103,8 @@ function toGridRows(items: RoadmapItem[]): GridRow[] {
     const themeLabel = (item.initiative.themes ?? [])
       .map((t) => t.strategicTheme.name)
       .join(", ");
+    const firstThemeColorToken =
+      item.initiative.themes?.[0]?.strategicTheme.colorToken ?? null;
     const objective =
       item.initiative.detailedObjective || item.initiative.shortObjective || "";
     const initiativeNotes = item.initiative.notes || "";
@@ -116,6 +119,7 @@ function toGridRows(items: RoadmapItem[]): GridRow[] {
         teamIds,
         teamsLabel,
         phase: "—",
+        phaseDefinitionId: null,
         capacityFraction: null,
         sprintNum: null,
         startDate: d(item.startDate),
@@ -128,6 +132,7 @@ function toGridRows(items: RoadmapItem[]): GridRow[] {
         themeLabel,
         businessObjective: objective,
         initiativeNotes,
+        firstThemeColorToken,
       });
       continue;
     }
@@ -140,7 +145,8 @@ function toGridRows(items: RoadmapItem[]): GridRow[] {
         initiativeName: item.initiative.canonicalName,
         teamIds,
         teamsLabel,
-        phase: phase.phaseName,
+        phase: phase.phaseDefinition?.name ?? phase.phaseName,
+        phaseDefinitionId: phase.phaseDefinitionId ?? null,
         capacityFraction:
           phase.capacityAllocationEstimate != null ? phase.capacityAllocationEstimate : null,
         sprintNum: phase.sprintEstimate != null ? phase.sprintEstimate : null,
@@ -154,6 +160,7 @@ function toGridRows(items: RoadmapItem[]): GridRow[] {
         themeLabel,
         businessObjective: objective,
         initiativeNotes,
+        firstThemeColorToken,
       });
     }
   }
@@ -165,51 +172,67 @@ function pctFromFraction(f: number | null): string {
   return String(Math.round(f * 100));
 }
 
-function parseCapacityInput(raw: string): number | null {
-  const t = raw.trim().replace(/%/g, "");
-  if (t === "") return null;
-  const n = Number(t);
-  if (Number.isNaN(n)) return null;
-  if (n > 1 && n <= 100) return n / 100;
-  if (n >= 0 && n <= 1) return n;
-  return n / 100;
-}
-
 export function RoadmapGridClient({
   roadmapId: _roadmapId,
   roadmapName,
   initial,
   workspaceTeams,
+  workspacePhases,
   roadmapThemes,
 }: {
   roadmapId: string;
   roadmapName: string;
   initial: RoadmapItem[];
   workspaceTeams: TeamOption[];
+  workspacePhases: { id: string; name: string }[];
   roadmapThemes: ThemeOption[];
 }) {
   void _roadmapId;
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
-  const [teamFilter, setTeamFilter] = useState("");
-  const [themeFilter, setThemeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [teamFilterIds, setTeamFilterIds] = useState<string[]>([]);
+  const [themeFilterIds, setThemeFilterIds] = useState<string[]>([]);
+  const [statusFilterValues, setStatusFilterValues] = useState<string[]>([]);
   const [phaseWindowStart, setPhaseWindowStart] = useState("");
   const [phaseWindowEnd, setPhaseWindowEnd] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [editRow, setEditRow] = useState<GridRow | null>(null);
 
   const rows = useMemo(() => toGridRows(initial), [initial]);
 
+  const statusFilterOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { value: string; label: string }[] = [];
+    for (const r of rows) {
+      const s = (r.status ?? "").trim();
+      if (!s || seen.has(s)) continue;
+      seen.add(s);
+      opts.push({ value: s, label: ITEM_STATUS_LABEL[s] ?? s });
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    return opts;
+  }, [rows]);
+
+  const teamSelectOptions = useMemo(
+    () => workspaceTeams.map((t) => ({ value: t.id, label: t.name })),
+    [workspaceTeams],
+  );
+  const themeSelectOptions = useMemo(
+    () => roadmapThemes.map((t) => ({ value: t.id, label: t.name })),
+    [roadmapThemes],
+  );
+
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      const teamOk = !teamFilter || r.teamsLabel.toLowerCase().includes(teamFilter.toLowerCase());
-      const themeOk = !themeFilter || r.themeLabel.toLowerCase().includes(themeFilter.toLowerCase());
-      const statusOk = !statusFilter || r.status.toLowerCase().includes(statusFilter.toLowerCase());
+      const teamOk =
+        teamFilterIds.length === 0 || teamFilterIds.some((id) => r.teamIds.includes(id));
+      const themeOk =
+        themeFilterIds.length === 0 || themeFilterIds.some((id) => r.themeIds.includes(id));
+      const statusOk =
+        statusFilterValues.length === 0 || statusFilterValues.includes(r.status);
       const winOk = windowOverlaps(r.startDate, r.endDate, phaseWindowStart, phaseWindowEnd);
       return teamOk && themeOk && statusOk && winOk;
     });
-  }, [rows, teamFilter, themeFilter, statusFilter, phaseWindowStart, phaseWindowEnd]);
+  }, [rows, teamFilterIds, themeFilterIds, statusFilterValues, phaseWindowStart, phaseWindowEnd]);
 
   const groups = useMemo(() => {
     const map = new Map<string, { initiativeName: string; rows: GridRow[] }>();
@@ -228,79 +251,91 @@ export function RoadmapGridClient({
     }));
   }, [filtered]);
 
-  const toggleGroup = useCallback((itemId: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  }, []);
-
-  const runSave = useCallback(
-    async (key: string, fn: () => Promise<void>) => {
-      setSavingKey(key);
-      try {
-        await fn();
-        push("Saved", "success");
-        router.refresh();
-      } catch (e) {
-        push(e instanceof Error ? e.message : "Save failed", "error");
-      } finally {
-        setSavingKey(null);
-      }
-    },
-    [push, router]
-  );
-
-  /** Shared control styles — box-border + min-w-0 keeps cells from spilling into neighbors. */
-  const controlBase =
-    "box-border w-full min-w-0 max-w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-500";
-  const inputCls = `${controlBase} h-9 shrink-0`;
-  const selectCls = `${controlBase} h-9 shrink-0`;
-  const multiSelectCls = `${controlBase} block h-28 shrink-0 overflow-y-auto overscroll-contain`;
-  const textareaSmCls = `${controlBase} min-h-[3.25rem] max-h-40 resize-y`;
-  const textareaLgCls = `${controlBase} min-h-[4.5rem] max-h-52 resize-y`;
+  function rowToEditShape(r: GridRow): GridRowEditShape {
+    return {
+      itemId: r.itemId,
+      initiativeId: r.initiativeId,
+      phaseId: r.phaseId,
+      kind: r.kind,
+      initiativeName: r.initiativeName,
+      teamIds: r.teamIds,
+      phase: r.phase,
+      phaseDefinitionId: r.phaseDefinitionId,
+      capacityFraction: r.capacityFraction,
+      sprintNum: r.sprintNum,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      type: r.type,
+      status: r.status,
+      notes: r.notes,
+      jira: r.jira,
+      themeIds: r.themeIds,
+      businessObjective: r.businessObjective,
+      initiativeNotes: r.initiativeNotes,
+    };
+  }
 
   return (
     <>
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
-      <div className="mb-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm xl:col-span-2">
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-12">
+        <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm sm:col-span-2 xl:col-span-3">
           <span className="text-slate-400">Roadmap: </span>
           {roadmapName}
         </div>
-        <input
-          className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          placeholder="Filter by team"
-          value={teamFilter}
-          onChange={(e) => setTeamFilter(e.target.value)}
-        />
-        <input
-          className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          placeholder="Filter by theme"
-          value={themeFilter}
-          onChange={(e) => setThemeFilter(e.target.value)}
-        />
-        <input
-          className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          placeholder="Filter by status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        />
-        <input
-          type="date"
-          className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          title="Phase window — from"
+        <label className="min-w-0 xl:col-span-3">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+            Team
+          </span>
+          <MultiSelectDropdown
+            options={teamSelectOptions}
+            value={teamFilterIds}
+            onChange={setTeamFilterIds}
+            placeholder="All teams"
+            emptyText="No teams defined."
+            searchable
+            searchPlaceholder="Search teams…"
+          />
+        </label>
+        <label className="min-w-0 xl:col-span-3">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+            Theme
+          </span>
+          <MultiSelectDropdown
+            options={themeSelectOptions}
+            value={themeFilterIds}
+            onChange={setThemeFilterIds}
+            placeholder="All themes"
+            emptyText="No themes on this roadmap."
+            searchable
+            searchPlaceholder="Search themes…"
+          />
+        </label>
+        <label className="min-w-0 xl:col-span-3">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+            Status
+          </span>
+          <MultiSelectDropdown
+            options={statusFilterOptions}
+            value={statusFilterValues}
+            onChange={setStatusFilterValues}
+            placeholder="All statuses"
+            emptyText="No status values in grid."
+            searchable
+            searchPlaceholder="Search status…"
+          />
+        </label>
+        <DatePickerField
+          className="min-w-0 sm:col-span-2 xl:col-span-6"
+          label="Phase window — from"
           value={phaseWindowStart}
-          onChange={(e) => setPhaseWindowStart(e.target.value)}
+          onChange={setPhaseWindowStart}
         />
-        <input
-          type="date"
-          className="rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          title="Phase window — to"
+        <DatePickerField
+          className="min-w-0 sm:col-span-2 xl:col-span-6"
+          label="Phase window — to"
           value={phaseWindowEnd}
-          onChange={(e) => setPhaseWindowEnd(e.target.value)}
+          onChange={setPhaseWindowEnd}
         />
       </div>
       <div className="mb-3 text-sm text-slate-400">
@@ -311,11 +346,24 @@ export function RoadmapGridClient({
           : ""}
         .
       </div>
+      {roadmapThemes.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+          <span className="font-medium uppercase tracking-wide text-slate-500">Theme colors</span>
+          {roadmapThemes.map((t) => (
+            <span key={t.id} className="inline-flex items-center gap-1.5">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full ring-1 ring-slate-600"
+                style={{ backgroundColor: themeColorHex(t.colorToken) ?? "transparent" }}
+              />
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-x-auto shadow-inner">
-        <table className="w-full min-w-[1980px] table-fixed border-collapse text-left text-xs">
+        <table className="w-full min-w-[1920px] table-fixed border-collapse text-left text-xs">
           <colgroup>
-            <col style={{ width: "2.5rem" }} />
             <col style={{ width: "9.25rem" }} />
             <col style={{ width: "8.25rem" }} />
             <col style={{ width: "6.5rem" }} />
@@ -329,10 +377,10 @@ export function RoadmapGridClient({
             <col style={{ width: "6.25rem" }} />
             <col style={{ width: "9.25rem" }} />
             <col />
+            <col style={{ width: "4.5rem" }} />
           </colgroup>
           <thead className="sticky top-0 z-20 bg-slate-950 text-slate-400 shadow-[0_1px_0_0_rgb(30_41_59)]">
             <tr>
-              <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom" aria-label="Expand" />
               <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom font-medium">
                 Initiative/Project
               </th>
@@ -353,28 +401,22 @@ export function RoadmapGridClient({
               <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom font-medium">Notes</th>
               <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom font-medium">Jira</th>
               <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom font-medium">Theme</th>
-              <th className="border-b border-slate-800 px-2 py-2.5 pr-3 text-left align-bottom font-medium">
+              <th className="border-b border-slate-800 px-2 py-2.5 text-left align-bottom font-medium">
                 Business Objective
+              </th>
+              <th className="border-b border-slate-800 px-2 py-2.5 pr-3 text-left align-bottom font-medium">
+                Edit
               </th>
             </tr>
           </thead>
           {groups.map((g) => {
-            const isCollapsed = collapsed.has(g.itemId);
             return (
               <tbody key={g.itemId}>
                 <tr className="border-b border-slate-800 bg-slate-950/70">
-                  <td className="align-middle px-2 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(g.itemId)}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-slate-600 text-slate-300 hover:bg-slate-800"
-                      aria-expanded={!isCollapsed}
-                      title={isCollapsed ? "Expand phases" : "Collapse phases"}
-                    >
-                      {isCollapsed ? "▶" : "▼"}
-                    </button>
-                  </td>
-                  <td colSpan={13} className="align-middle px-2 py-2 pr-3">
+                  <td
+                    colSpan={14}
+                    className={`align-middle px-2 py-2 pr-3 ${themeInitiativeHeaderAccentClass(g.rows[0]?.firstThemeColorToken ?? null)}`}
+                  >
                     <span className="font-semibold text-slate-200">{g.initiativeName}</span>
                     <Link
                       href={`/initiatives/${g.rows[0]?.initiativeId}`}
@@ -387,348 +429,87 @@ export function RoadmapGridClient({
                     </span>
                   </td>
                 </tr>
-                {!isCollapsed &&
-                  g.rows.map((r) => {
+                {g.rows.map((r) => {
                     const rowKey = r.kind === "item_only" ? `${r.itemId}-item` : r.phaseId;
-                    const busy = savingKey === rowKey;
                     const rowSyncKey = `${rowKey}-${r.initiativeName}-${r.teamIds.join(",")}-${r.themeIds.join(",")}-${r.phase}-${r.startDate}-${r.endDate}-${r.status}-${r.notes}-${r.jira}-${r.capacityFraction}-${r.sprintNum}-${r.type}-${r.businessObjective}`;
-                    const typeOptions = mergeOptionList(INITIATIVE_TYPE_OPTIONS, r.type);
-                    const phaseStatusOptions = mergeOptionList(PHASE_STATUS_OPTIONS, r.status);
+                    const notesDisplay = r.kind === "phase" ? r.notes : r.initiativeNotes;
+                    const statusLabel =
+                      r.kind === "item_only"
+                        ? ITEM_STATUS_LABEL[r.status] ?? r.status
+                        : r.status || "—";
+
+                    const rowLabel =
+                      r.kind === "phase"
+                        ? `${r.initiativeName} — ${r.phase || "phase"}`
+                        : `${r.initiativeName} — timeline`;
+
+                    const openThisRow = () => setEditRow(r);
 
                     return (
-                      <tr key={rowSyncKey} className="border-b border-slate-800/80 align-top odd:bg-slate-900/20">
-                        <td className="align-top px-2 py-2" aria-hidden />
-                        <td className="align-top px-2 py-2">
-                          <input
-                            disabled={busy}
-                            className={inputCls}
-                            defaultValue={r.initiativeName}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (!v || v === r.initiativeName) return;
-                              void runSave(rowKey, () =>
-                                sendJson(`/api/initiatives/${r.initiativeId}`, "PATCH", {
-                                  canonicalName: v,
-                                })
-                              );
-                            }}
-                          />
+                      <tr
+                        key={rowSyncKey}
+                        tabIndex={0}
+                        className="cursor-pointer border-b border-slate-800/80 align-top odd:bg-slate-900/20 outline-none hover:bg-slate-800/35 focus-visible:bg-slate-800/35 focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-inset"
+                        title="Click or press Enter to edit"
+                        aria-label={`Edit row: ${rowLabel}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setEditRow(r);
+                          }
+                        }}
+                      >
+                        <td onClick={openThisRow} className="max-w-[9rem] align-top px-2 py-2 text-xs text-slate-200">
+                          <span className="line-clamp-4 break-words">{r.initiativeName}</span>
                         </td>
-                        <td className="align-top px-2 py-2">
-                          <select
-                            key={`teams-${r.itemId}-${r.teamIds.slice().sort().join(",")}`}
-                            multiple
-                            size={5}
-                            disabled={busy}
-                            title="Hold Ctrl (Windows) or ⌘ (Mac) to select multiple teams"
-                            className={multiSelectCls}
-                            defaultValue={r.teamIds}
-                            onChange={(e) => {
-                              const ids = Array.from(e.target.selectedOptions).map((o) => o.value);
-                              void runSave(rowKey, () =>
-                                sendJson(`/api/roadmap-items/${r.itemId}/teams`, "PUT", { teamIds: ids })
-                              );
-                            }}
+                        <td onClick={openThisRow} className="max-w-[8rem] align-top px-2 py-2 text-xs text-slate-300">
+                          <span className="line-clamp-6 break-words">{r.teamsLabel || "—"}</span>
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs text-slate-300">
+                          {r.kind === "phase" ? r.phase : "—"}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs tabular-nums text-slate-300">
+                          {r.kind === "phase" ? pctFromFraction(r.capacityFraction) || "—" : "—"}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs tabular-nums text-slate-300">
+                          {r.kind === "phase" && r.sprintNum != null ? r.sprintNum : "—"}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs tabular-nums text-slate-300">
+                          {r.startDate}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs tabular-nums text-slate-300">
+                          {r.endDate}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs text-slate-300">
+                          {r.type || "—"}
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs text-slate-300">
+                          {statusLabel}
+                        </td>
+                        <td onClick={openThisRow} className="max-w-[10rem] align-top px-2 py-2 text-xs text-slate-400">
+                          <span className="line-clamp-4 whitespace-pre-wrap break-words">
+                            {notesDisplay?.trim() || "—"}
+                          </span>
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 text-xs text-slate-300">
+                          {r.jira || "—"}
+                        </td>
+                        <td onClick={openThisRow} className="max-w-[9rem] align-top px-2 py-2 text-xs text-slate-300">
+                          <span className="line-clamp-4 break-words">{r.themeLabel || "—"}</span>
+                        </td>
+                        <td onClick={openThisRow} className="max-w-[12rem] align-top px-2 py-2 text-xs text-slate-400">
+                          <span className="line-clamp-5 whitespace-pre-wrap break-words">
+                            {r.businessObjective?.trim() || "—"}
+                          </span>
+                        </td>
+                        <td onClick={openThisRow} className="align-top px-2 py-2 pr-3">
+                          <span
+                            tabIndex={-1}
+                            aria-hidden="true"
+                            className="inline-block rounded-md border border-indigo-700/60 px-2 py-1 text-xs text-indigo-200"
                           >
-                            {workspaceTeams.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          {r.kind === "phase" ? (
-                            <input
-                              disabled={busy}
-                              className={inputCls}
-                              defaultValue={r.phase}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v === r.phase) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    phaseName: v,
-                                  })
-                                );
-                              }}
-                            />
-                          ) : (
-                            <span className="block py-2 text-slate-500">—</span>
-                          )}
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          {r.kind === "phase" ? (
-                            <input
-                              disabled={busy}
-                              className={inputCls}
-                              defaultValue={pctFromFraction(r.capacityFraction)}
-                              placeholder="%"
-                              onBlur={(e) => {
-                                const parsed = parseCapacityInput(e.target.value);
-                                const prev = r.capacityFraction;
-                                const same =
-                                  (parsed == null && prev == null) ||
-                                  (parsed != null &&
-                                    prev != null &&
-                                    Math.abs(parsed - prev) < 0.0001);
-                                if (same) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    capacityAllocationEstimate: parsed,
-                                  })
-                                );
-                              }}
-                            />
-                          ) : (
-                            <span className="block py-2 text-slate-500">—</span>
-                          )}
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          {r.kind === "phase" ? (
-                            <input
-                              type="number"
-                              step="any"
-                              disabled={busy}
-                              className={inputCls}
-                              defaultValue={r.sprintNum ?? ""}
-                              onBlur={(e) => {
-                                const raw = e.target.value.trim();
-                                const n = raw === "" ? null : Number(raw);
-                                if (raw !== "" && Number.isNaN(n!)) return;
-                                const same =
-                                  (n == null && r.sprintNum == null) ||
-                                  (n != null && r.sprintNum != null && n === r.sprintNum);
-                                if (same) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    sprintEstimate: n,
-                                  })
-                                );
-                              }}
-                            />
-                          ) : (
-                            <span className="block py-2 text-slate-500">—</span>
-                          )}
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          <input
-                            type="date"
-                            disabled={busy}
-                            className={inputCls}
-                            defaultValue={r.startDate}
-                            onBlur={(e) => {
-                              const v = e.target.value;
-                              if (!v || v === r.startDate) return;
-                              if (r.kind === "phase") {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    startDate: v,
-                                  })
-                                );
-                              } else {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/roadmap-items/${r.itemId}`, "PATCH", {
-                                    startDate: v,
-                                  })
-                                );
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          <input
-                            type="date"
-                            disabled={busy}
-                            className={inputCls}
-                            defaultValue={r.endDate}
-                            onBlur={(e) => {
-                              const v = e.target.value;
-                              if (!v || v === r.endDate) return;
-                              if (r.kind === "phase") {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    endDate: v,
-                                  })
-                                );
-                              } else {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/roadmap-items/${r.itemId}`, "PATCH", {
-                                    endDate: v,
-                                  })
-                                );
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          <select
-                            disabled={busy}
-                            className={selectCls}
-                            defaultValue={r.type}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              if (v === r.type) return;
-                              void runSave(rowKey, () =>
-                                sendJson(`/api/initiatives/${r.initiativeId}`, "PATCH", {
-                                  type: v || null,
-                                })
-                              );
-                            }}
-                          >
-                            {typeOptions.map((opt) => (
-                              <option key={opt || "__empty"} value={opt}>
-                                {opt || "—"}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          {r.kind === "item_only" ? (
-                            <select
-                              disabled={busy}
-                              className={selectCls}
-                              defaultValue={r.status}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === r.status) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/roadmap-items/${r.itemId}`, "PATCH", {
-                                    status: v,
-                                  })
-                                );
-                              }}
-                            >
-                              {ITEM_STATUS_VALUES.map((s) => (
-                                <option key={s} value={s}>
-                                  {ITEM_STATUS_LABEL[s] ?? s}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <select
-                              disabled={busy}
-                              className={selectCls}
-                              defaultValue={r.status || ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === (r.status || "")) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    status: v || null,
-                                  })
-                                );
-                              }}
-                            >
-                              {phaseStatusOptions.map((opt) => (
-                                <option key={opt || "__empty"} value={opt}>
-                                  {opt || "—"}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          {r.kind === "phase" ? (
-                            <textarea
-                              disabled={busy}
-                              rows={2}
-                              className={textareaSmCls}
-                              defaultValue={r.notes}
-                              onBlur={(e) => {
-                                const v = e.target.value;
-                                if (v === r.notes) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    notes: v || null,
-                                  })
-                                );
-                              }}
-                            />
-                          ) : (
-                            <textarea
-                              disabled={busy}
-                              rows={2}
-                              className={textareaSmCls}
-                              defaultValue={r.initiativeNotes}
-                              onBlur={(e) => {
-                                const v = e.target.value;
-                                if (v === r.initiativeNotes) return;
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/initiatives/${r.initiativeId}`, "PATCH", {
-                                    notes: v || null,
-                                  })
-                                );
-                              }}
-                            />
-                          )}
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          <input
-                            disabled={busy}
-                            className={inputCls}
-                            defaultValue={r.jira}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v === r.jira) return;
-                              if (r.kind === "phase") {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/phase-segments/${r.phaseId}`, "PATCH", {
-                                    jiraKey: v || null,
-                                  })
-                                );
-                              } else {
-                                void runSave(rowKey, () =>
-                                  sendJson(`/api/initiatives/${r.initiativeId}`, "PATCH", {
-                                    sourceReference: v || null,
-                                    sourceSystem: v ? "jira" : null,
-                                  })
-                                );
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="align-top px-2 py-2">
-                          <select
-                            key={`th-${r.initiativeId}-${r.themeIds.slice().sort().join(",")}`}
-                            multiple
-                            size={5}
-                            disabled={busy}
-                            title="Hold Ctrl or ⌘ to select multiple themes"
-                            className={multiSelectCls}
-                            defaultValue={r.themeIds}
-                            onChange={(e) => {
-                              const ids = Array.from(e.target.selectedOptions).map((o) => o.value);
-                              void runSave(rowKey, () =>
-                                sendJson(`/api/initiatives/${r.initiativeId}/theme-links`, "PUT", {
-                                  strategicThemeIds: ids,
-                                })
-                              );
-                            }}
-                          >
-                            {roadmapThemes.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="align-top px-2 py-2 pr-3">
-                          <textarea
-                            disabled={busy}
-                            rows={3}
-                            className={textareaLgCls}
-                            defaultValue={r.businessObjective}
-                            onBlur={(e) => {
-                              const v = e.target.value;
-                              if (v === r.businessObjective) return;
-                              void runSave(rowKey, () =>
-                                sendJson(`/api/initiatives/${r.initiativeId}`, "PATCH", {
-                                  detailedObjective: v || null,
-                                })
-                              );
-                            }}
-                          />
+                            Edit
+                          </span>
                         </td>
                       </tr>
                     );
@@ -747,6 +528,20 @@ export function RoadmapGridClient({
           )}
         </table>
       </div>
+
+      <GridRowEditModal
+        row={editRow ? rowToEditShape(editRow) : null}
+        open={!!editRow}
+        onClose={() => setEditRow(null)}
+        workspaceTeams={workspaceTeams}
+        workspacePhases={workspacePhases}
+        roadmapThemes={roadmapThemes}
+        onSaved={() => {
+          push("Saved.", "success");
+          router.refresh();
+        }}
+        onError={(m) => push(m, "error")}
+      />
     </>
   );
 }

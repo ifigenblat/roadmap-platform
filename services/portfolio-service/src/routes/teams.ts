@@ -1,15 +1,12 @@
 import { Router } from "express";
 import { createTeamSchema, patchTeamSchema } from "@roadmap/types";
-import { getDefaultWorkspaceId, prisma } from "../db.js";
-import { workspaceIdFromQuery } from "../workspace-guards.js";
+import { prisma } from "../db.js";
 
 export const teamsRouter = Router();
 
-teamsRouter.get("/teams", async (req, res) => {
-  const ws = workspaceIdFromQuery(req);
+teamsRouter.get("/teams", async (_req, res) => {
   res.json(
     await prisma.team.findMany({
-      where: ws ? { workspaceId: ws } : undefined,
       orderBy: { name: "asc" },
     })
   );
@@ -18,13 +15,9 @@ teamsRouter.get("/teams", async (req, res) => {
 teamsRouter.post("/teams", async (req, res) => {
   const parsed = createTeamSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const workspaceId =
-    typeof req.body.workspaceId === "string" && req.body.workspaceId.length > 0
-      ? req.body.workspaceId
-      : await getDefaultWorkspaceId();
   res.status(201).json(
     await prisma.team.create({
-      data: { ...parsed.data, workspaceId },
+      data: parsed.data,
     })
   );
 });

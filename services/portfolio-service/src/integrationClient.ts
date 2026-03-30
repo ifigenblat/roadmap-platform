@@ -1,4 +1,4 @@
-const base = () => process.env.INTEGRATION_SERVICE_URL || "http://localhost:4400";
+const base = () => process.env.INTEGRATION_SERVICE_URL || "http://localhost:4410";
 const key = () => process.env.INTERNAL_API_KEY || "";
 
 export async function integrationCreateExternalLink(data: {
