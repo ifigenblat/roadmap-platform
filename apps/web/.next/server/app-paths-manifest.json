@@ -1,0 +1,11 @@
+{
+  "/phases/page": "app/phases/page.js",
+  "/themes/page": "app/themes/page.js",
+  "/teams/page": "app/teams/page.js",
+  "/imports/page": "app/imports/page.js",
+  "/sponsors/page": "app/sponsors/page.js",
+  "/page": "app/page.js",
+  "/templates/page": "app/templates/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/settings/integrations/page": "app/settings/integrations/page.js"
+}
